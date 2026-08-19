@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, getIssueStatus, issueCoupon } from './api/couponApi'
+import CampaignMonitor from './components/CampaignMonitor'
 import './App.css'
 
 const STORAGE_KEY = 'ace-manager-issue-records'
@@ -506,6 +507,8 @@ function App() {
             <button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">×</button>
           </div>
         )}
+
+        <CampaignMonitor />
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
           <div className="traffic-intro">

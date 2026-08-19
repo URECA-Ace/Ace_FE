@@ -374,6 +374,344 @@ h1 {
   box-shadow: 0 8px 30px rgba(28, 17, 31, 0.035);
 }
 
+.campaign-monitor {
+  margin-bottom: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.monitor-header {
+  padding: 24px 27px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid #eeeaf0;
+  background:
+    radial-gradient(circle at 3% 0%, rgba(230, 0, 126, 0.08), transparent 28%),
+    #fff;
+}
+
+.monitor-kicker {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--magenta);
+  font: 800 9px/1 Manrope, sans-serif;
+  letter-spacing: 1.5px;
+}
+
+.monitor-header h2 {
+  margin-bottom: 7px;
+  font-size: 19px;
+}
+
+.monitor-header p {
+  margin-bottom: 0;
+  color: #847c87;
+  font-size: 10px;
+}
+
+.monitor-form {
+  flex: 0 0 340px;
+}
+
+.monitor-form > label {
+  display: block;
+  margin-bottom: 6px;
+  color: #817984;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.monitor-form > div {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px;
+}
+
+.monitor-form input {
+  width: 100%;
+  height: 39px;
+  padding: 0 11px;
+  border: 1px solid #ded8e0;
+  border-radius: 9px;
+  color: #302932;
+  background: #faf9fb;
+  font-size: 11px;
+}
+
+.monitor-form input:disabled {
+  color: #8e8791;
+  background: #f2eff3;
+}
+
+.monitor-start,
+.monitor-stop {
+  min-height: 39px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.monitor-start {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(100deg, var(--magenta), #ae006f);
+  box-shadow: 0 8px 18px rgba(230, 0, 126, 0.15);
+}
+
+.monitor-stop {
+  border: 1px solid #e7c9d9;
+  color: #a10063;
+  background: #fff4fa;
+}
+
+.monitor-body {
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(420px, 1.6fr);
+  gap: 12px;
+  background: #fbfafc;
+}
+
+.campaign-state-card,
+.inventory-watch {
+  min-width: 0;
+  min-height: 178px;
+  padding: 16px;
+  border: 1px solid #eae5ec;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.campaign-state-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-top: 3px solid #aaa2ad;
+}
+
+.campaign-state-card.scheduled {
+  border-top-color: #e3a21a;
+}
+
+.campaign-state-card.open {
+  border-top-color: #11a574;
+}
+
+.campaign-state-card.sold-out {
+  border-top-color: #d72b55;
+}
+
+.campaign-state-card.closed {
+  border-top-color: #6f6672;
+}
+
+.campaign-state-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.campaign-state-heading div {
+  min-width: 0;
+}
+
+.campaign-state-heading small,
+.campaign-state-heading strong {
+  display: block;
+}
+
+.campaign-state-heading small {
+  margin-bottom: 3px;
+  color: #9a929d;
+  font: 700 7px/1 Manrope, sans-serif;
+}
+
+.campaign-state-heading strong {
+  color: #3b333d;
+  font-size: 12px;
+}
+
+.state-live-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #a69faa;
+  box-shadow: 0 0 0 5px rgba(166, 159, 170, 0.1);
+}
+
+.scheduled .state-live-dot {
+  background: #e3a21a;
+  box-shadow: 0 0 0 5px rgba(227, 162, 26, 0.11);
+}
+
+.open .state-live-dot {
+  background: #11a574;
+  box-shadow: 0 0 0 5px rgba(17, 165, 116, 0.11);
+  animation: live-pulse 1.5s infinite;
+}
+
+.sold-out .state-live-dot {
+  background: #d72b55;
+}
+
+.closed .state-live-dot {
+  background: #6f6672;
+}
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(17, 165, 116, 0.1); }
+  50% { box-shadow: 0 0 0 7px rgba(17, 165, 116, 0.02); }
+}
+
+.polling-chip {
+  margin-left: auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #087552;
+  background: #eaf8f3;
+  font: 800 7px/1 Manrope, sans-serif;
+}
+
+.campaign-state-card > p {
+  margin: 16px 0;
+  color: #7f7782;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.campaign-state-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.campaign-state-card dl > div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 8px;
+  background: #f8f6f9;
+}
+
+.campaign-state-card dt {
+  margin-bottom: 4px;
+  color: #9c949f;
+  font-size: 7px;
+}
+
+.campaign-state-card dd {
+  margin: 0;
+  overflow: hidden;
+  color: #514953;
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-watch {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.inventory-heading {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.inventory-heading > div {
+  padding-right: 10px;
+  border-right: 1px solid #eeeaf0;
+}
+
+.inventory-heading > div:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.inventory-heading span,
+.inventory-heading strong {
+  display: block;
+}
+
+.inventory-heading span {
+  margin-bottom: 9px;
+  color: #8d8590;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.inventory-heading strong {
+  color: #39313b;
+  font: 800 23px/1 Manrope, sans-serif;
+  letter-spacing: -0.8px;
+}
+
+.inventory-heading .remaining strong {
+  color: var(--magenta-dark);
+}
+
+.inventory-progress-heading {
+  margin: 24px 0 7px;
+  display: flex;
+  justify-content: space-between;
+  color: #8f8792;
+  font-size: 8px;
+}
+
+.inventory-progress-heading strong {
+  color: #4d454f;
+  font-family: Manrope, sans-serif;
+}
+
+.inventory-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #eeeaf0;
+  overflow: hidden;
+}
+
+.inventory-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--magenta), #ff52ae);
+  transition: width 250ms ease;
+}
+
+.inventory-watch > p {
+  margin: 11px 0 0;
+  color: #aaa2ad;
+  font-size: 7px;
+}
+
+.monitor-error {
+  margin: 0 24px 20px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #f0c8d1;
+  border-radius: 9px;
+  color: #a82343;
+  background: #fff3f6;
+  font-size: 8px;
+}
+
+.monitor-error strong {
+  font-size: 9px;
+}
+
+.monitor-error small {
+  margin-left: auto;
+  opacity: 0.68;
+}
+
 .traffic-panel {
   position: relative;
   margin-bottom: 16px;
@@ -1236,6 +1574,10 @@ tbody tr:hover {
   .traffic-result-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .monitor-body {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1328,6 +1670,35 @@ tbody tr:hover {
 
   .traffic-note {
     padding-inline: 18px;
+  }
+
+  .campaign-monitor {
+    padding: 0;
+  }
+
+  .monitor-header {
+    padding: 20px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monitor-form {
+    flex-basis: auto;
+  }
+
+  .monitor-body {
+    padding: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  .monitor-error {
+    margin-inline: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .monitor-error small {
+    margin-left: 0;
   }
 }
 

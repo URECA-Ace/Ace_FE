@@ -60,3 +60,12 @@ export function getIssueStatus(eventId, requestId) {
     headers: { Accept: 'application/json' },
   })
 }
+
+export function getIssuanceStats(eventId, signal) {
+  return request(`/api/v1/events/${eventId}/issuance-stats`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
