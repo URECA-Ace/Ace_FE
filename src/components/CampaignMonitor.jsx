@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, getIssuanceStats } from '../api/couponApi'
+import ScheduledOpenTimeline from './ScheduledOpenTimeline'
 
 const POLLING_INTERVAL_MS = 1000
 
@@ -128,7 +129,7 @@ function CampaignMonitor() {
       <div className="monitor-header">
         <div>
           <span className="monitor-kicker">REAL-TIME CAMPAIGN WATCH</span>
-          <h2 id="campaign-monitor-title">실시간 쿠폰 발급 현황</h2>
+          <h2 id="campaign-monitor-title">예약 오픈 · 실시간 발급 관제</h2>
           <p>Redis 서버 시각 기준 캠페인 상태와 재고를 1초 간격으로 조회합니다.</p>
         </div>
         <form className="monitor-form" onSubmit={startMonitoring}>
@@ -203,6 +204,12 @@ function CampaignMonitor() {
           </div>
           <p>배정 수량은 Redis 재고 차감 기준이며 MySQL 최종 저장 건수와 구분됩니다.</p>
         </div>
+
+        <ScheduledOpenTimeline
+          key={monitoredEventId ?? 'campaign-not-selected'}
+          status={stats?.status}
+          observedAt={stats?.observedAt}
+        />
 
       </div>
 

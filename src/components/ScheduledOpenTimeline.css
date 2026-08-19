@@ -1,0 +1,133 @@
+.status-transition-list {
+  min-width: 0;
+  min-height: 178px;
+  padding: 16px;
+  border: 1px solid #eae5ec;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.transition-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 13px;
+}
+
+.transition-heading strong,
+.transition-heading small {
+  display: block;
+}
+
+.transition-heading strong {
+  font-size: 9px;
+}
+
+.transition-heading small {
+  margin-top: 3px;
+  color: #a29aa5;
+  font-size: 7px;
+}
+
+.transition-heading > span {
+  color: #a29aa5;
+  font: 700 6px/1 Manrope, sans-serif;
+}
+
+.status-transition-list ol {
+  max-height: 96px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.status-transition-list li {
+  padding: 7px 0;
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f2eff3;
+}
+
+.transition-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #aaa2ad;
+}
+
+.transition-dot.scheduled { background: #e3a21a; }
+.transition-dot.open { background: #11a574; }
+.transition-dot.sold-out { background: #d72b55; }
+.transition-dot.closed { background: #6f6672; }
+
+.status-transition-list li strong,
+.status-transition-list li small {
+  display: block;
+}
+
+.status-transition-list li strong {
+  color: #4c444e;
+  font-size: 8px;
+}
+
+.status-transition-list li small {
+  margin-top: 2px;
+  color: #a49ca7;
+  font: 700 6px/1 Manrope, sans-serif;
+}
+
+.status-transition-list time {
+  color: #958d98;
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.transition-empty {
+  min-height: 78px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  color: #aaa3ad;
+  font-size: 8px;
+  text-align: center;
+}
+
+.transition-empty > span {
+  color: #d29a27;
+  font-size: 19px;
+}
+
+.transition-empty p,
+.schedule-note {
+  margin: 0;
+}
+
+.schedule-note {
+  margin-top: 7px;
+  color: #b0a9b2;
+  font-size: 6px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .status-transition-list {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+
+  .status-transition-list ol {
+    max-height: 90px;
+  }
+}
+
+@media (max-width: 760px) {
+  .status-transition-list {
+    grid-column: auto;
+  }
+}
