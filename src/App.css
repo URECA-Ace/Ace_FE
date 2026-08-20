@@ -374,6 +374,72 @@ h1 {
   box-shadow: 0 8px 30px rgba(28, 17, 31, 0.035);
 }
 
+.campaign-management {
+  display: grid;
+  gap: 16px;
+}
+
+.tab-heading {
+  padding: 4px 2px 3px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.tab-heading .eyebrow {
+  margin-bottom: 7px;
+}
+
+.tab-heading h2 {
+  margin-bottom: 6px;
+  font-size: 22px;
+  letter-spacing: -1px;
+}
+
+.tab-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.schedule-management-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+  gap: 16px;
+}
+
+.schedule-overview {
+  min-height: 178px;
+}
+
+.schedule-detail-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.schedule-detail-grid div {
+  padding: 12px;
+  border: 1px solid #eeeaf0;
+  border-radius: 10px;
+  background: #fcfbfd;
+}
+
+.schedule-detail-grid dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.schedule-detail-grid dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .event-create-panel {
   margin-bottom: 16px;
 }
@@ -406,6 +472,34 @@ h1 {
 .event-create-form button {
   align-self: end;
   min-height: 40px;
+}
+
+.schedule-settings {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid #eadfe7;
+  border-radius: 11px;
+  background: #fff9fc;
+}
+
+.schedule-settings legend {
+  padding: 0 6px;
+  color: var(--magenta-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.schedule-settings p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.schedule-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
 }
 
 .created-event-summary {
@@ -1637,6 +1731,10 @@ tbody tr:hover {
   .event-create-form {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .schedule-management-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1760,6 +1858,16 @@ tbody tr:hover {
     margin-left: 0;
   }
 
+  .tab-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .schedule-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
   .event-create-form {
     grid-template-columns: 1fr 1fr;
   }
@@ -1807,6 +1915,10 @@ tbody tr:hover {
   }
 
   .event-create-form {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-settings-fields {
     grid-template-columns: 1fr;
   }
 }

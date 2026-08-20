@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import './ScheduledOpenTimeline.css'
 
 const STATUS_LABELS = {
-  SCHEDULED: '예약 오픈 대기',
-  OPEN: '예약 시각 도달 · 오픈',
+  SCHEDULED: '발급 대기',
+  OPEN: '발급 진행 중',
   SOLD_OUT: '재고 소진',
   CLOSED: '캠페인 종료',
 }
@@ -45,9 +45,9 @@ function ScheduledOpenTimeline({ status, observedAt }) {
       <div className="transition-heading">
         <div>
           <strong>예약 상태 전환</strong>
-          <small>스케줄러 동작 감지</small>
+          <small>이벤트 상태 기록</small>
         </div>
-        <span>SCHEDULED → OPEN</span>
+        <span>발급 대기 → 진행 중</span>
       </div>
 
       {transitions.length > 0 ? (
@@ -66,7 +66,7 @@ function ScheduledOpenTimeline({ status, observedAt }) {
       ) : (
         <div className="transition-empty">
           <span>◷</span>
-          <p>관제를 시작하면 예약 오픈 상태가 기록됩니다.</p>
+          <p>이벤트 상태를 조회하면 상태 변경이 기록됩니다.</p>
         </div>
       )}
 

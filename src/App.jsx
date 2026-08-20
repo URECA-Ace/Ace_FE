@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, createCouponEvent, getIssueStatus, issueCoupon } from './api/couponApi'
 import CampaignMonitor from './components/CampaignMonitor'
+import ScheduledOpenTimeline from './components/ScheduledOpenTimeline'
 import './App.css'
 
 const STORAGE_KEY = 'ace-manager-issue-records'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 const PARTICIPANT_COUNT = 20000
-const EXPECTED_STOCK = 10000
 const DEFAULT_CONCURRENCY = 128
 
 const INITIAL_LOAD_RESULT = {
@@ -44,6 +44,9 @@ const ERROR_LABELS = {
   EVENT_NOT_OPEN: '아직 오픈하지 않은 캠페인입니다.',
   EVENT_CLOSED: '종료된 캠페인입니다.',
   EVENT_NOT_FOUND: '캠페인을 찾을 수 없습니다.',
+  COUPON_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
+  EVENT_ALREADY_EXISTS: '같은 쿠폰의 회차가 이미 존재합니다.',
+  INVALID_EVENT_TIME: '이벤트 오픈/마감 시각을 확인하세요.',
   ISSUE_NOT_FOUND: '발급 요청을 찾을 수 없습니다.',
   ISSUE_TEMPORARILY_UNAVAILABLE: '발급 시스템을 일시적으로 사용할 수 없습니다.',
   NETWORK_ERROR: '백엔드 서버에 연결할 수 없습니다.',
@@ -127,6 +130,7 @@ function App() {
   const [closeAt, setCloseAt] = useState('')
   const [creatingEvent, setCreatingEvent] = useState(false)
   const [createdEvent, setCreatedEvent] = useState(null)
+  const [activeTab, setActiveTab] = useState('operations')
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
@@ -406,10 +410,10 @@ function App() {
 
     if (!controller.signal.aborted) {
       setNotice({
-        tone: counters.accepted > EXPECTED_STOCK ? 'danger' : 'success',
+        tone: counters.accepted > expectedStock ? 'danger' : 'success',
         message:
-          counters.accepted > EXPECTED_STOCK
-            ? `기대 재고 ${EXPECTED_STOCK.toLocaleString()}장을 초과해 승인되었습니다.`
+          counters.accepted > expectedStock
+            ? `기대 재고 ${expectedStock.toLocaleString()}장을 초과해 승인되었습니다.`
             : '참여자 20,000명의 선착순 발급 요청을 완료했습니다.',
       })
     }
@@ -471,7 +475,7 @@ function App() {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       setNotice({
         tone: 'danger',
-        message: apiError.message,
+        message: ERROR_LABELS[apiError.code] ?? apiError.message,
       })
     } finally {
       setCreatingEvent(false)
@@ -479,15 +483,17 @@ function App() {
   }
 
   const selectedMeta = statusMeta(selected?.status)
+  const expectedStock = createdEvent?.totalStock ?? (Number(totalStock) || 0)
   const loadProgress = (loadResult.completed / PARTICIPANT_COUNT) * 100
   const loadThroughput = loadResult.elapsedMs > 0
     ? Math.round(loadResult.completed / (loadResult.elapsedMs / 1000))
     : 0
-  const overIssued = loadResult.accepted > EXPECTED_STOCK
+  const overIssued = expectedStock > 0 && loadResult.accepted > expectedStock
   const loadTestPassed =
     loadResult.completed === PARTICIPANT_COUNT &&
-    loadResult.accepted === EXPECTED_STOCK &&
-    loadResult.soldOut === PARTICIPANT_COUNT - EXPECTED_STOCK &&
+    expectedStock > 0 &&
+    loadResult.accepted === expectedStock &&
+    loadResult.soldOut === PARTICIPANT_COUNT - expectedStock &&
     loadResult.duplicate === 0 &&
     loadResult.errors === 0
 
@@ -500,14 +506,21 @@ function App() {
         </div>
 
         <nav className="nav-list" aria-label="관리자 메뉴">
-          <button className="nav-item active" type="button">
+          <button
+            className={`nav-item ${activeTab === 'operations' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('operations')}
+          >
             <span className="nav-icon">⌁</span>
             발급 운영
           </button>
-          <button className="nav-item" type="button" disabled>
+          <button
+            className={`nav-item ${activeTab === 'campaigns' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('campaigns')}
+          >
             <span className="nav-icon">◎</span>
             캠페인 관리
-            <span className="soon">예정</span>
           </button>
           <button className="nav-item" type="button" disabled>
             <span className="nav-icon">↗</span>
@@ -574,64 +587,113 @@ function App() {
           </div>
         )}
 
-        <CampaignMonitor />
+        {activeTab === 'campaigns' && (
+          <section className="campaign-management" aria-labelledby="campaign-management-title">
+            <div className="tab-heading">
+              <div>
+                <span className="eyebrow">CAMPAIGN MANAGEMENT</span>
+                <h2 id="campaign-management-title">쿠폰 이벤트와 예약 오픈 관리</h2>
+                <p>쿠폰을 발급할 이벤트를 만들고, 오픈 및 마감 일정을 관리합니다.</p>
+              </div>
+              <span className="api-chip">EVENT CONFIGURATION</span>
+            </div>
 
-        <section className="panel event-create-panel" aria-labelledby="event-create-title">
-          <div className="panel-heading">
-            <div>
-              <span className="section-number">00</span>
-              <h2 id="event-create-title">쿠폰 이벤트 생성</h2>
-            </div>
-            <span className="api-chip">POST · /coupons/{'{couponId}'}/events</span>
-          </div>
-          <form className="event-create-form" onSubmit={createEvent}>
-            <label>
-              쿠폰 ID
-              <input type="number" min="1" step="1" value={couponId} onChange={(event) => setCouponId(event.target.value)} required />
-            </label>
-            <label>
-              회차
-              <input type="number" min="1" step="1" value={eventRound} onChange={(event) => setEventRound(event.target.value)} required />
-            </label>
-            <label>
-              전체 재고
-              <input type="number" min="1" step="1" value={totalStock} onChange={(event) => setTotalStock(event.target.value)} required />
-            </label>
-            <label>
-              오픈 시각
-              <input type="datetime-local" value={openAt} onChange={(event) => setOpenAt(event.target.value)} required />
-            </label>
-            <label>
-              마감 시각
-              <input type="datetime-local" value={closeAt} onChange={(event) => setCloseAt(event.target.value)} required />
-            </label>
-            <button className="primary-button" type="submit" disabled={creatingEvent}>
-              {creatingEvent ? '이벤트 생성 중…' : '쿠폰 이벤트 생성'}
-              <span>→</span>
-            </button>
-          </form>
-          {createdEvent && (
-            <div className="created-event-summary" role="status">
-              <strong>이벤트 #{createdEvent.eventId}</strong>
-              <span>{createdEvent.status} · {createdEvent.remainingStock?.toLocaleString()}장 대기</span>
-              <small>{formatDate(createdEvent.openAt)} 오픈 · {formatDate(createdEvent.closeAt)} 마감</small>
-            </div>
-          )}
-        </section>
+            <section className="panel event-create-panel" aria-labelledby="event-create-title">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-number">00</span>
+                  <h2 id="event-create-title">쿠폰 이벤트 생성</h2>
+                </div>
+                <span className="api-chip">POST · /coupons/{'{couponId}'}/events</span>
+              </div>
+              <form className="event-create-form" onSubmit={createEvent}>
+                <label>
+                  쿠폰 ID
+                  <input type="number" min="1" step="1" value={couponId} onChange={(event) => setCouponId(event.target.value)} required />
+                </label>
+                <label>
+                  회차
+                  <input type="number" min="1" step="1" value={eventRound} onChange={(event) => setEventRound(event.target.value)} required />
+                </label>
+                <label>
+                  전체 재고
+                  <input type="number" min="1" step="1" value={totalStock} onChange={(event) => setTotalStock(event.target.value)} required />
+                </label>
+                <fieldset className="schedule-settings">
+                  <legend>예약 오픈 설정</legend>
+                  <p>설정한 오픈 시각부터 쿠폰 발급이 가능해집니다.</p>
+                  <div className="schedule-settings-fields">
+                    <label>
+                      오픈 시각
+                      <input type="datetime-local" value={openAt} onChange={(event) => setOpenAt(event.target.value)} required />
+                    </label>
+                    <label>
+                      마감 시각
+                      <input type="datetime-local" value={closeAt} onChange={(event) => setCloseAt(event.target.value)} required />
+                    </label>
+                  </div>
+                </fieldset>
+                <button className="primary-button" type="submit" disabled={creatingEvent}>
+                  {creatingEvent ? '이벤트 생성 중…' : '쿠폰 이벤트 생성'}
+                  <span>→</span>
+                </button>
+              </form>
+              {createdEvent && (
+                <div className="created-event-summary" role="status">
+                  <strong>이벤트 #{createdEvent.eventId}</strong>
+                  <span>{createdEvent.status} · {createdEvent.remainingStock?.toLocaleString()}장 대기</span>
+                  <small>{formatDate(createdEvent.openAt)} 오픈 · {formatDate(createdEvent.closeAt)} 마감</small>
+                </div>
+              )}
+            </section>
+
+            <section className="schedule-management-grid">
+              <article className="panel schedule-overview" aria-labelledby="schedule-overview-title">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-number">01</span>
+                    <h2 id="schedule-overview-title">예약 오픈 일정</h2>
+                  </div>
+                  <span className="api-chip subtle">SERVER SCHEDULE</span>
+                </div>
+                {createdEvent ? (
+                  <dl className="schedule-detail-grid">
+                    <div><dt>이벤트</dt><dd>#{createdEvent.eventId} · {createdEvent.round}회차</dd></div>
+                    <div><dt>현재 상태</dt><dd>{createdEvent.status}</dd></div>
+                    <div><dt>오픈 시각</dt><dd>{formatDate(createdEvent.openAt)}</dd></div>
+                    <div><dt>마감 시각</dt><dd>{formatDate(createdEvent.closeAt)}</dd></div>
+                  </dl>
+                ) : (
+                  <div className="empty-state small">
+                    <strong>생성된 이벤트가 없습니다</strong>
+                    <p>이벤트를 생성하면 예약 오픈 일정이 표시됩니다.</p>
+                  </div>
+                )}
+              </article>
+              <ScheduledOpenTimeline
+                status={createdEvent?.status}
+                observedAt={createdEvent?.openAt}
+              />
+            </section>
+          </section>
+        )}
+
+        {activeTab === 'operations' && <>
+        <CampaignMonitor />
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
           <div className="traffic-intro">
             <div className="traffic-copy">
               <span className="traffic-kicker">FIRST-COME, FIRST-SERVED TRAFFIC</span>
-              <h2 id="traffic-title">재고 10,000장 · 참여자 20,000명</h2>
+              <h2 id="traffic-title">재고 {expectedStock.toLocaleString()}장 · 참여자 {PARTICIPANT_COUNT.toLocaleString()}명</h2>
               <p>
-                재고 10,000장 캠페인에 서로 다른 사용자 20,000명이 발급을 요청합니다.
+                재고 {expectedStock.toLocaleString()}장 캠페인에 서로 다른 사용자 {PARTICIPANT_COUNT.toLocaleString()}명이 발급을 요청합니다.
                 승인과 재고 소진 응답을 실시간으로 집계해 초과 발급 여부를 확인합니다.
               </p>
               <div className="traffic-expectation">
-                <span><strong>10,000</strong> ACCEPTED</span>
+                <span><strong>{expectedStock.toLocaleString()}</strong> ACCEPTED</span>
                 <span className="expectation-divider">+</span>
-                <span><strong>10,000</strong> SOLD_OUT</span>
+                <span><strong>{Math.max(PARTICIPANT_COUNT - expectedStock, 0).toLocaleString()}</strong> SOLD_OUT</span>
                 <span className="expectation-equals">= 초과 발급 0</span>
               </div>
             </div>
@@ -752,13 +814,13 @@ function App() {
               <small>
                 {loadResult.finishedAt
                   ? `소요 ${(loadResult.elapsedMs / 1000).toFixed(1)}초 · 최저 잔여 ${loadResult.remainingStock ?? '-'}장`
-                  : '신규 10,000장 캠페인으로 실행하세요.'}
+                  : '캠페인 관리에서 생성한 이벤트 ID로 실행하세요.'}
               </small>
             </div>
           </div>
 
           <p className="traffic-note">
-            참여자 20,000명은 서로 다른 사용자 ID로 한 번씩 요청하며, 최대 10,000명만 쿠폰을 발급받습니다.
+            참여자 {PARTICIPANT_COUNT.toLocaleString()}명은 서로 다른 사용자 ID로 한 번씩 요청하며, 설정된 재고만큼 쿠폰을 발급받습니다.
             개별 응답은 사용자 이력에 저장하지 않고 결과만 집계합니다.
             이 수치는 브라우저에서 API까지의 요청 결과로, 서버 내부 Lua 벤치마크 TPS와는 구분됩니다.
           </p>
@@ -924,6 +986,7 @@ function App() {
             )}
           </article>
         </section>
+        </>}
 
         <section className="history-grid">
           <article className="panel history-panel">
