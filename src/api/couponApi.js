@@ -69,3 +69,15 @@ export function getIssuanceStats(eventId, signal) {
     headers: { Accept: 'application/json' },
   })
 }
+
+export function createCouponEvent(couponId, payload, signal) {
+  return request(`/api/v1/coupons/${couponId}/events`, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}

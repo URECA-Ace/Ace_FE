@@ -374,6 +374,61 @@ h1 {
   box-shadow: 0 8px 30px rgba(28, 17, 31, 0.035);
 }
 
+.event-create-panel {
+  margin-bottom: 16px;
+}
+
+.event-create-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 13px;
+}
+
+.event-create-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.event-create-form input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fbfafc;
+  font-size: 12px;
+}
+
+.event-create-form button {
+  align-self: end;
+  min-height: 40px;
+}
+
+.created-event-summary {
+  margin-top: 15px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 15px;
+  border-left: 3px solid var(--magenta);
+  background: #fff5fb;
+  font-size: 11px;
+}
+
+.created-event-summary span {
+  color: var(--magenta-dark);
+  font-weight: 700;
+}
+
+.created-event-summary small {
+  color: var(--muted);
+}
+
 .campaign-monitor {
   margin-bottom: 16px;
   padding: 0;
@@ -1578,6 +1633,10 @@ tbody tr:hover {
   .monitor-body {
     grid-template-columns: 1fr 1fr;
   }
+
+  .event-create-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
@@ -1700,6 +1759,10 @@ tbody tr:hover {
   .monitor-error small {
     margin-left: 0;
   }
+
+  .event-create-form {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 470px) {
@@ -1741,5 +1804,9 @@ tbody tr:hover {
 
   .traffic-result-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .event-create-form {
+    grid-template-columns: 1fr;
   }
 }

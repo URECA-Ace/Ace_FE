@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ApiError, getIssueStatus, issueCoupon } from './api/couponApi'
+import { ApiError, createCouponEvent, getIssueStatus, issueCoupon } from './api/couponApi'
 import CampaignMonitor from './components/CampaignMonitor'
 import './App.css'
 
@@ -120,6 +120,13 @@ function App() {
   const [startUserId, setStartUserId] = useState('1')
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY))
   const [loadResult, setLoadResult] = useState(INITIAL_LOAD_RESULT)
+  const [couponId, setCouponId] = useState('1')
+  const [eventRound, setEventRound] = useState('1')
+  const [totalStock, setTotalStock] = useState('10000')
+  const [openAt, setOpenAt] = useState('')
+  const [closeAt, setCloseAt] = useState('')
+  const [creatingEvent, setCreatingEvent] = useState(false)
+  const [createdEvent, setCreatedEvent] = useState(null)
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
@@ -412,6 +419,65 @@ function App() {
     loadAbortRef.current?.abort()
   }
 
+  async function createEvent(event) {
+    event.preventDefault()
+    const parsedCouponId = Number(couponId)
+    const parsedRound = Number(eventRound)
+    const parsedTotalStock = Number(totalStock)
+    const openDate = new Date(openAt)
+    const closeDate = new Date(closeAt)
+
+    if (!Number.isSafeInteger(parsedCouponId) || parsedCouponId <= 0) {
+      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      return
+    }
+    if (!Number.isSafeInteger(parsedRound) || parsedRound <= 0) {
+      setNotice({ tone: 'danger', message: '회차는 1 이상의 정수여야 합니다.' })
+      return
+    }
+    if (!Number.isSafeInteger(parsedTotalStock) || parsedTotalStock <= 0) {
+      setNotice({ tone: 'danger', message: '전체 재고는 1 이상의 정수여야 합니다.' })
+      return
+    }
+    if (Number.isNaN(openDate.getTime()) || Number.isNaN(closeDate.getTime())) {
+      setNotice({ tone: 'danger', message: '오픈 시각과 마감 시각을 모두 입력하세요.' })
+      return
+    }
+    if (closeDate <= openDate) {
+      setNotice({ tone: 'danger', message: '마감 시각은 오픈 시각보다 늦어야 합니다.' })
+      return
+    }
+
+    setCreatingEvent(true)
+    setNotice(null)
+    try {
+      const data = await createCouponEvent(parsedCouponId, {
+        round: parsedRound,
+        totalStock: parsedTotalStock,
+        openAt: openDate.toISOString(),
+        closeAt: closeDate.toISOString(),
+      })
+      const newEventId = data.eventId
+      setCreatedEvent(data)
+      if (newEventId) {
+        setEventId(String(newEventId))
+        setLoadEventId(String(newEventId))
+      }
+      setNotice({
+        tone: 'success',
+        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되었습니다. 발급 및 관제 대상에 자동 반영했습니다.`,
+      })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({
+        tone: 'danger',
+        message: apiError.message,
+      })
+    } finally {
+      setCreatingEvent(false)
+    }
+  }
+
   const selectedMeta = statusMeta(selected?.status)
   const loadProgress = (loadResult.completed / PARTICIPANT_COUNT) * 100
   const loadThroughput = loadResult.elapsedMs > 0
@@ -509,6 +575,49 @@ function App() {
         )}
 
         <CampaignMonitor />
+
+        <section className="panel event-create-panel" aria-labelledby="event-create-title">
+          <div className="panel-heading">
+            <div>
+              <span className="section-number">00</span>
+              <h2 id="event-create-title">쿠폰 이벤트 생성</h2>
+            </div>
+            <span className="api-chip">POST · /coupons/{'{couponId}'}/events</span>
+          </div>
+          <form className="event-create-form" onSubmit={createEvent}>
+            <label>
+              쿠폰 ID
+              <input type="number" min="1" step="1" value={couponId} onChange={(event) => setCouponId(event.target.value)} required />
+            </label>
+            <label>
+              회차
+              <input type="number" min="1" step="1" value={eventRound} onChange={(event) => setEventRound(event.target.value)} required />
+            </label>
+            <label>
+              전체 재고
+              <input type="number" min="1" step="1" value={totalStock} onChange={(event) => setTotalStock(event.target.value)} required />
+            </label>
+            <label>
+              오픈 시각
+              <input type="datetime-local" value={openAt} onChange={(event) => setOpenAt(event.target.value)} required />
+            </label>
+            <label>
+              마감 시각
+              <input type="datetime-local" value={closeAt} onChange={(event) => setCloseAt(event.target.value)} required />
+            </label>
+            <button className="primary-button" type="submit" disabled={creatingEvent}>
+              {creatingEvent ? '이벤트 생성 중…' : '쿠폰 이벤트 생성'}
+              <span>→</span>
+            </button>
+          </form>
+          {createdEvent && (
+            <div className="created-event-summary" role="status">
+              <strong>이벤트 #{createdEvent.eventId}</strong>
+              <span>{createdEvent.status} · {createdEvent.remainingStock?.toLocaleString()}장 대기</span>
+              <small>{formatDate(createdEvent.openAt)} 오픈 · {formatDate(createdEvent.closeAt)} 마감</small>
+            </div>
+          )}
+        </section>
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
           <div className="traffic-intro">
