@@ -23,6 +23,13 @@ async function request(path, options) {
   try {
     body = await response.json()
   } catch {
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      throw new ApiError(
+        'BACKEND_UNAVAILABLE',
+        '백엔드 서버에 연결할 수 없습니다. Spring 서버가 설정된 포트에서 실행 중인지 확인하세요.',
+        response.status,
+      )
+    }
     throw new ApiError(
       'INVALID_RESPONSE',
       '서버가 올바른 JSON 응답을 반환하지 않았습니다.',
@@ -70,6 +77,18 @@ export function getIssuanceStats(eventId, signal) {
   })
 }
 
+export function createCoupon(payload, signal) {
+  return request('/api/v1/coupons', {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 export function createCouponEvent(couponId, payload, signal) {
   return request(`/api/v1/coupons/${couponId}/events`, {
     method: 'POST',
@@ -79,5 +98,13 @@ export function createCouponEvent(couponId, payload, signal) {
       Accept: 'application/json',
     },
     body: JSON.stringify(payload),
+  })
+}
+
+export function initializeCampaign(eventId, signal) {
+  return request(`/internal/campaigns/${eventId}/init`, {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
   })
 }

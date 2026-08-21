@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getIssuanceStats } from '../api/couponApi'
 
 const POLLING_INTERVAL_MS = 1000
@@ -46,13 +46,15 @@ function formatObservedAt(value) {
   }).format(date)
 }
 
-function CampaignMonitor() {
-  const [eventId, setEventId] = useState('1')
+function CampaignMonitor({ selectedEventId }) {
+  const [eventId, setEventId] = useState(() => String(selectedEventId ?? ''))
   const [monitoredEventId, setMonitoredEventId] = useState(null)
   const [stats, setStats] = useState(null)
   const [polling, setPolling] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const pollingControllerRef = useRef(null)
+  const pollingTimeoutRef = useRef(null)
 
   const readStats = useCallback(async (targetEventId, signal) => {
     setLoading(true)
@@ -81,13 +83,13 @@ function CampaignMonitor() {
     if (!polling || !monitoredEventId) return undefined
 
     const controller = new AbortController()
-    let timeoutId
     let disposed = false
+    pollingControllerRef.current = controller
 
     async function poll() {
       await readStats(monitoredEventId, controller.signal)
       if (!disposed && !controller.signal.aborted) {
-        timeoutId = window.setTimeout(poll, POLLING_INTERVAL_MS)
+        pollingTimeoutRef.current = window.setTimeout(poll, POLLING_INTERVAL_MS)
       }
     }
 
@@ -96,9 +98,33 @@ function CampaignMonitor() {
     return () => {
       disposed = true
       controller.abort()
-      window.clearTimeout(timeoutId)
+      if (pollingControllerRef.current === controller) {
+        pollingControllerRef.current = null
+      }
+      if (pollingTimeoutRef.current !== null) {
+        window.clearTimeout(pollingTimeoutRef.current)
+        pollingTimeoutRef.current = null
+      }
     }
   }, [monitoredEventId, polling, readStats])
+
+  useEffect(() => () => {
+    pollingControllerRef.current?.abort()
+    if (pollingTimeoutRef.current !== null) {
+      window.clearTimeout(pollingTimeoutRef.current)
+    }
+  }, [])
+
+  function stopMonitoring() {
+    pollingControllerRef.current?.abort()
+    pollingControllerRef.current = null
+    if (pollingTimeoutRef.current !== null) {
+      window.clearTimeout(pollingTimeoutRef.current)
+      pollingTimeoutRef.current = null
+    }
+    setLoading(false)
+    setPolling(false)
+  }
 
   function startMonitoring(event) {
     event.preventDefault()
@@ -141,10 +167,11 @@ function CampaignMonitor() {
               step="1"
               value={eventId}
               onChange={(event) => setEventId(event.target.value)}
+              placeholder="먼저 캠페인을 생성하세요"
               disabled={polling}
             />
             {polling ? (
-              <button type="button" className="monitor-stop" onClick={() => setPolling(false)}>
+              <button type="button" className="monitor-stop" onClick={stopMonitoring}>
                 관제 중지
               </button>
             ) : (

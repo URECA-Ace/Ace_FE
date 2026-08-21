@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ApiError, createCouponEvent, getIssueStatus, issueCoupon } from './api/couponApi'
+import {
+  ApiError,
+  createCoupon,
+  createCouponEvent,
+  getIssueStatus,
+  getIssuanceStats,
+  initializeCampaign,
+  issueCoupon,
+} from './api/couponApi'
 import CampaignMonitor from './components/CampaignMonitor'
 import ScheduledOpenTimeline from './components/ScheduledOpenTimeline'
 import './App.css'
@@ -8,6 +16,33 @@ const STORAGE_KEY = 'ace-manager-issue-records'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
+
+function toDateTimeLocal(date) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    '-',
+    pad(date.getMonth() + 1),
+    '-',
+    pad(date.getDate()),
+    'T',
+    pad(date.getHours()),
+    ':',
+    pad(date.getMinutes()),
+  ].join('')
+}
+
+function createDefaultEventForm() {
+  const now = new Date()
+  const open = new Date(now.getTime() - 60_000)
+  const close = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+  return {
+    openAt: toDateTimeLocal(open),
+    closeAt: toDateTimeLocal(close),
+  }
+}
+
+const DEFAULT_EVENT_FORM = createDefaultEventForm()
 
 const INITIAL_LOAD_RESULT = {
   running: false,
@@ -45,10 +80,15 @@ const ERROR_LABELS = {
   EVENT_CLOSED: '종료된 캠페인입니다.',
   EVENT_NOT_FOUND: '캠페인을 찾을 수 없습니다.',
   COUPON_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
-  EVENT_ALREADY_EXISTS: '같은 쿠폰의 회차가 이미 존재합니다.',
-  INVALID_EVENT_TIME: '이벤트 오픈/마감 시각을 확인하세요.',
+  EVENT_CONFIGURATION_CONFLICT: '같은 회차의 캠페인이 다른 설정으로 이미 존재합니다.',
+  CAMPAIGN_CONFIG_CONFLICT: 'Redis에 다른 설정으로 초기화된 캠페인입니다.',
+  CAMPAIGN_NOT_INITIALIZABLE: '현재 상태에서는 캠페인을 초기화할 수 없습니다.',
+  CAMPAIGN_INIT_FAILED: 'Redis 캠페인 초기화에 실패했습니다.',
+  CAMPAIGN_INITIALIZATION_TEMPORARILY_UNAVAILABLE:
+    '캠페인은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
   ISSUE_NOT_FOUND: '발급 요청을 찾을 수 없습니다.',
   ISSUE_TEMPORARILY_UNAVAILABLE: '발급 시스템을 일시적으로 사용할 수 없습니다.',
+  BACKEND_UNAVAILABLE: '백엔드 서버에 연결할 수 없습니다. Spring 서버가 실행 중인지 확인하세요.',
   NETWORK_ERROR: '백엔드 서버에 연결할 수 없습니다.',
 }
 
@@ -73,6 +113,10 @@ function formatDate(value) {
     second: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+function currentTimestamp() {
+  return Date.now()
 }
 
 function statusMeta(status) {
@@ -115,22 +159,30 @@ function mergeStatus(record, data, source = 'POLL') {
 function App() {
   const [records, setRecords] = useState(loadRecords)
   const [selectedId, setSelectedId] = useState(() => loadRecords()[0]?.id ?? null)
-  const [eventId, setEventId] = useState('1')
-  const [userId, setUserId] = useState('')
+  const [eventId, setEventId] = useState('')
+  const [userId, setUserId] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState(null)
-  const [loadEventId, setLoadEventId] = useState('1')
-  const [startUserId, setStartUserId] = useState('1')
+  const [loadEventId, setLoadEventId] = useState('')
+  const [startUserId, setStartUserId] = useState('1001')
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY))
   const [loadResult, setLoadResult] = useState(INITIAL_LOAD_RESULT)
-  const [couponId, setCouponId] = useState('1')
-  const [eventRound, setEventRound] = useState('1')
+  const [couponName, setCouponName] = useState('U+ 데이터 하루 무제한 쿠폰')
+  const [couponType, setCouponType] = useState('DATA_UNLIMITED')
+  const [couponValue, setCouponValue] = useState('0')
+  const [validHours, setValidHours] = useState('24')
+  const [creatingCoupon, setCreatingCoupon] = useState(false)
+  const [createdCoupon, setCreatedCoupon] = useState(null)
   const [totalStock, setTotalStock] = useState('10000')
-  const [openAt, setOpenAt] = useState('')
-  const [closeAt, setCloseAt] = useState('')
+  const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
+  const [closeAt, setCloseAt] = useState(DEFAULT_EVENT_FORM.closeAt)
   const [creatingEvent, setCreatingEvent] = useState(false)
   const [createdEvent, setCreatedEvent] = useState(null)
-  const [activeTab, setActiveTab] = useState('operations')
+  const [initializationEventId, setInitializationEventId] = useState('')
+  const [initializingCampaign, setInitializingCampaign] = useState(false)
+  const [initializationResult, setInitializationResult] = useState(null)
+  const [operationCampaign, setOperationCampaign] = useState(null)
+  const [activeTab, setActiveTab] = useState('campaigns')
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
@@ -170,9 +222,11 @@ function App() {
   }, [records])
 
   const summary = useMemo(() => {
-    const issued = records.filter((record) => record.status === 'ISSUED').length
+    const accepted = records.filter((record) =>
+      ['ACCEPTED', 'ISSUED'].includes(record.status),
+    ).length
     const processing = records.filter((record) =>
-      PENDING_STATUSES.has(record.status),
+      record.status === 'PROCESSING',
     ).length
     const failed = records.filter((record) =>
       ['FAILED', 'COMPENSATED', 'REQUEST_FAILED'].includes(record.status),
@@ -180,7 +234,7 @@ function App() {
     const latestStock = records.find(
       (record) => record.remainingStock !== null && record.remainingStock !== undefined,
     )?.remainingStock
-    return { issued, processing, failed, latestStock }
+    return { accepted, processing, failed, latestStock }
   }, [records])
 
   async function requestIssue({ retryRecord } = {}) {
@@ -193,6 +247,34 @@ function App() {
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
       setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
+      return
+    }
+    if (!operationCampaign || Number(operationCampaign.eventId) !== parsedEventId) {
+      setNotice({
+        tone: 'danger',
+        message: '과거 캠페인은 발급할 수 없습니다. 캠페인 관리에서 새 이벤트를 먼저 생성하세요.',
+      })
+      setActiveTab('campaigns')
+      return
+    }
+
+    try {
+      const stats = await getIssuanceStats(parsedEventId)
+      if (stats.status !== 'OPEN') {
+        setNotice({
+          tone: 'danger',
+          message: `캠페인 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 캠페인만 발급할 수 있습니다.`,
+        })
+        return
+      }
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({
+        tone: 'danger',
+        message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
+          ? 'Redis에 초기화되지 않은 캠페인입니다. 캠페인 관리에서 새 이벤트를 생성하세요.'
+          : ERROR_LABELS[apiError.code] ?? apiError.message,
+      })
       return
     }
 
@@ -303,7 +385,8 @@ function App() {
     setNotice({ tone: 'neutral', message: '브라우저에 저장된 시연 기록을 비웠습니다.' })
   }
 
-  async function runLoadSimulation() {
+  async function handleLoadSimulationSubmit(event) {
+    event.preventDefault()
     const parsedEventId = Number(loadEventId)
     const parsedStartUserId = Number(startUserId)
     const parsedConcurrency = Number(concurrency)
@@ -324,10 +407,42 @@ function App() {
       setNotice({ tone: 'danger', message: '동시 요청 수는 1~300 사이여야 합니다.' })
       return
     }
+    if (!operationCampaign || Number(operationCampaign.eventId) !== parsedEventId) {
+      setNotice({
+        tone: 'danger',
+        message: '캠페인 관리에서 트래픽 테스트용 새 이벤트를 먼저 생성하세요.',
+      })
+      setActiveTab('campaigns')
+      return
+    }
+
+    try {
+      const stats = await getIssuanceStats(parsedEventId)
+      if (stats.status !== 'OPEN') {
+        setNotice({ tone: 'danger', message: `OPEN 캠페인만 실행할 수 있습니다. 현재 상태: ${stats.status}` })
+        return
+      }
+      if (stats.remainingStock !== stats.totalStock) {
+        setNotice({
+          tone: 'danger',
+          message: `현재 잔여 재고가 ${stats.remainingStock.toLocaleString()}장입니다. 정확한 검증을 위해 새 10,000장 캠페인을 생성하세요.`,
+        })
+        return
+      }
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({
+        tone: 'danger',
+        message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
+          ? 'Redis에 초기화되지 않은 캠페인입니다. 새 이벤트를 생성한 뒤 실행하세요.'
+          : ERROR_LABELS[apiError.code] ?? apiError.message,
+      })
+      return
+    }
 
     const controller = new AbortController()
     loadAbortRef.current = controller
-    const startedAt = Date.now()
+    const startedAt = currentTimestamp()
     let nextIndex = 0
     const counters = {
       completed: 0,
@@ -347,7 +462,7 @@ function App() {
     })
 
     const publish = (finished = false) => {
-      const now = Date.now()
+      const now = currentTimestamp()
       setLoadResult({
         ...counters,
         running: !finished,
@@ -423,20 +538,59 @@ function App() {
     loadAbortRef.current?.abort()
   }
 
+  async function createCouponProduct(event) {
+    event.preventDefault()
+    const parsedValue = Number(couponValue)
+    const parsedValidHours = Number(validHours)
+
+    if (!couponName.trim()) {
+      setNotice({ tone: 'danger', message: '쿠폰 이름을 입력하세요.' })
+      return
+    }
+    if (!Number.isSafeInteger(parsedValue) || parsedValue < 0) {
+      setNotice({ tone: 'danger', message: '혜택 값은 0 이상의 정수여야 합니다.' })
+      return
+    }
+    if (!Number.isSafeInteger(parsedValidHours) || parsedValidHours <= 0) {
+      setNotice({ tone: 'danger', message: '발급 후 유효 시간은 1시간 이상이어야 합니다.' })
+      return
+    }
+
+    setCreatingCoupon(true)
+    setNotice(null)
+    try {
+      const data = await createCoupon({
+        couponName: couponName.trim(),
+        type: couponType,
+        value: parsedValue,
+        validHours: parsedValidHours,
+      })
+      setCreatedCoupon(data)
+      setCreatedEvent(null)
+      setOperationCampaign(null)
+      setEventId('')
+      setLoadEventId('')
+      setNotice({
+        tone: 'success',
+        message: `쿠폰 상품 ${data.couponId}번이 생성되었습니다. 이제 1회차 발급 일정을 설정하세요.`,
+      })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({ tone: 'danger', message: ERROR_LABELS[apiError.code] ?? apiError.message })
+    } finally {
+      setCreatingCoupon(false)
+    }
+  }
+
   async function createEvent(event) {
     event.preventDefault()
-    const parsedCouponId = Number(couponId)
-    const parsedRound = Number(eventRound)
+    const parsedCouponId = Number(createdCoupon?.couponId)
     const parsedTotalStock = Number(totalStock)
     const openDate = new Date(openAt)
     const closeDate = new Date(closeAt)
 
     if (!Number.isSafeInteger(parsedCouponId) || parsedCouponId <= 0) {
       setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
-      return
-    }
-    if (!Number.isSafeInteger(parsedRound) || parsedRound <= 0) {
-      setNotice({ tone: 'danger', message: '회차는 1 이상의 정수여야 합니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedTotalStock) || parsedTotalStock <= 0) {
@@ -456,21 +610,25 @@ function App() {
     setNotice(null)
     try {
       const data = await createCouponEvent(parsedCouponId, {
-        round: parsedRound,
         totalStock: parsedTotalStock,
         openAt: openDate.toISOString(),
         closeAt: closeDate.toISOString(),
       })
+
       const newEventId = data.eventId
       setCreatedEvent(data)
+      setOperationCampaign(data)
+      setLoadResult(INITIAL_LOAD_RESULT)
       if (newEventId) {
         setEventId(String(newEventId))
         setLoadEventId(String(newEventId))
+        setInitializationEventId(String(newEventId))
       }
       setNotice({
         tone: 'success',
-        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되었습니다. 발급 및 관제 대상에 자동 반영했습니다.`,
+        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되고 Redis 재고가 초기화되었습니다. 발급 운영으로 이동했습니다.`,
       })
+      setActiveTab('operations')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       setNotice({
@@ -482,8 +640,41 @@ function App() {
     }
   }
 
+  async function initializeEvent(event) {
+    event.preventDefault()
+    const parsedEventId = Number(initializationEventId)
+
+    if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
+      setNotice({ tone: 'danger', message: '초기화할 캠페인 ID는 1 이상의 정수여야 합니다.' })
+      return
+    }
+
+    setInitializingCampaign(true)
+    setInitializationResult(null)
+    setNotice(null)
+    try {
+      const data = await initializeCampaign(parsedEventId)
+      setInitializationResult(data)
+      setOperationCampaign(data)
+      setEventId(String(data.eventId))
+      setLoadEventId(String(data.eventId))
+      setNotice({
+        tone: 'success',
+        message: `캠페인 ${data.eventId}번 Redis 초기화 결과: ${data.result}`,
+      })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({
+        tone: 'danger',
+        message: ERROR_LABELS[apiError.code] ?? apiError.message,
+      })
+    } finally {
+      setInitializingCampaign(false)
+    }
+  }
+
   const selectedMeta = statusMeta(selected?.status)
-  const expectedStock = createdEvent?.totalStock ?? (Number(totalStock) || 0)
+  const expectedStock = operationCampaign?.totalStock ?? (Number(totalStock) || 0)
   const loadProgress = (loadResult.completed / PARTICIPANT_COUNT) * 100
   const loadThroughput = loadResult.elapsedMs > 0
     ? Math.round(loadResult.completed / (loadResult.elapsedMs / 1000))
@@ -563,9 +754,9 @@ function App() {
             <span className="summary-unit">장</span>
           </article>
           <article className="summary-card">
-            <span>발급 완료</span>
-            <strong>{summary.issued.toLocaleString()}</strong>
-            <small>현재 브라우저 기록</small>
+            <span>발급 판정 승인</span>
+            <strong>{summary.accepted.toLocaleString()}</strong>
+            <small>Redis 원자적 판정 통과</small>
           </article>
           <article className="summary-card">
             <span>처리 중</span>
@@ -598,22 +789,94 @@ function App() {
               <span className="api-chip">EVENT CONFIGURATION</span>
             </div>
 
-            <section className="panel event-create-panel" aria-labelledby="event-create-title">
+            <ol className="demo-flow" aria-label="쿠폰 발급 시연 순서">
+              <li className="active">
+                <span>1</span>
+                <div><strong>쿠폰 상품 생성</strong><small>이름 · 종류 · 혜택 · 유효시간</small></div>
+              </li>
+              <li>
+                <span>2</span>
+                <div><strong>회차와 예약 생성</strong><small>1회차부터 서버 자동 배정</small></div>
+              </li>
+              <li>
+                <span>3</span>
+                <div><strong>발급 운영</strong><small>한 장 발급 / 20,000명 요청</small></div>
+              </li>
+            </ol>
+
+            <section className="panel coupon-create-panel" aria-labelledby="coupon-create-title">
               <div className="panel-heading">
                 <div>
                   <span className="section-number">00</span>
-                  <h2 id="event-create-title">쿠폰 이벤트 생성</h2>
+                  <h2 id="coupon-create-title">쿠폰 상품 생성</h2>
                 </div>
-                <span className="api-chip">POST · /coupons/{'{couponId}'}/events</span>
+                <span className="api-chip">POST · /api/v1/coupons</span>
+              </div>
+              <form className="event-create-form coupon-product-form" onSubmit={createCouponProduct}>
+                <label>
+                  쿠폰 이름
+                  <input value={couponName} maxLength="100" onChange={(event) => setCouponName(event.target.value)} required />
+                </label>
+                <label>
+                  쿠폰 종류
+                  <select value={couponType} onChange={(event) => setCouponType(event.target.value)}>
+                    <option value="DATA_UNLIMITED">데이터 무제한</option>
+                    <option value="DATA_AMOUNT">데이터 용량</option>
+                    <option value="DISCOUNT">요금 할인</option>
+                  </select>
+                </label>
+                <label>
+                  혜택 값
+                  <input type="number" min="0" step="1" value={couponValue} onChange={(event) => setCouponValue(event.target.value)} required />
+                  <small className="form-field-help">무제한 쿠폰은 0으로 설정합니다.</small>
+                </label>
+                <label>
+                  발급 후 유효 시간
+                  <div className="input-with-unit">
+                    <input type="number" min="1" step="1" value={validHours} onChange={(event) => setValidHours(event.target.value)} required />
+                    <span>시간</span>
+                  </div>
+                </label>
+                <button className="primary-button" type="submit" disabled={creatingCoupon}>
+                  {creatingCoupon ? '쿠폰 생성 중…' : '쿠폰 상품 생성'}
+                  <span>→</span>
+                </button>
+              </form>
+              {createdCoupon && (
+                <div className="created-event-summary" role="status">
+                  <strong>쿠폰 #{createdCoupon.couponId}</strong>
+                  <span>{createdCoupon.couponName}</span>
+                  <small>{createdCoupon.type} · 혜택 {createdCoupon.value} · 발급 후 {createdCoupon.validHours}시간</small>
+                </div>
+              )}
+            </section>
+
+            <section className="panel event-create-panel" aria-labelledby="event-create-title">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-number">01</span>
+                  <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
+                </div>
+                <span className="api-chip">POST · /api/v1/coupons/{'{couponId}'}/events</span>
               </div>
               <form className="event-create-form" onSubmit={createEvent}>
                 <label>
-                  쿠폰 ID
-                  <input type="number" min="1" step="1" value={couponId} onChange={(event) => setCouponId(event.target.value)} required />
+                  대상 쿠폰
+                  <input
+                    value={createdCoupon ? `#${createdCoupon.couponId} · ${createdCoupon.couponName}` : ''}
+                    readOnly
+                    aria-readonly="true"
+                    placeholder="먼저 쿠폰 상품을 생성하세요"
+                  />
                 </label>
                 <label>
                   회차
-                  <input type="number" min="1" step="1" value={eventRound} onChange={(event) => setEventRound(event.target.value)} required />
+                  <input
+                    value={createdEvent ? `${createdEvent.round}회차` : '서버에서 자동 배정'}
+                    readOnly
+                    aria-readonly="true"
+                    title="쿠폰별 마지막 회차 다음 번호가 서버 트랜잭션에서 배정됩니다."
+                  />
                 </label>
                 <label>
                   전체 재고
@@ -633,7 +896,7 @@ function App() {
                     </label>
                   </div>
                 </fieldset>
-                <button className="primary-button" type="submit" disabled={creatingEvent}>
+                <button className="primary-button" type="submit" disabled={creatingEvent || !createdCoupon}>
                   {creatingEvent ? '이벤트 생성 중…' : '쿠폰 이벤트 생성'}
                   <span>→</span>
                 </button>
@@ -675,11 +938,60 @@ function App() {
                 observedAt={createdEvent?.openAt}
               />
             </section>
+
+            <section className="panel campaign-initialization" aria-labelledby="campaign-initialization-title">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-number">02</span>
+                  <h2 id="campaign-initialization-title">Redis 캠페인 초기화 복구 · 장애 대응 전용</h2>
+                </div>
+                <span className="api-chip">POST · /internal/campaigns/{'{eventId}'}/init</span>
+              </div>
+              <div className="initialization-layout">
+                <div className="initialization-copy">
+                  <strong>일반 발급에서는 실행하지 않습니다.</strong>
+                  <p>
+                    위의 캠페인 생성 API가 DB 저장과 Redis 초기화를 함께 처리합니다.
+                    이 기능은 생성 응답이 초기화 실패로 끝난 경우에만 사용합니다.
+                    백엔드에서 <code>coupon.issue.admin.enabled=true</code>로 노출한 시연 환경에서만 동작합니다.
+                  </p>
+                </div>
+                <form className="initialization-form" onSubmit={initializeEvent}>
+                  <label htmlFor="initialization-event-id">캠페인 ID</label>
+                  <div>
+                    <input
+                      id="initialization-event-id"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={initializationEventId}
+                      onChange={(event) => setInitializationEventId(event.target.value)}
+                      placeholder="예: 24"
+                      required
+                    />
+                    <button className="secondary-button" type="submit" disabled={initializingCampaign}>
+                      {initializingCampaign ? '초기화 중…' : 'Redis 초기화 실행'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+              {initializationResult && (
+                <dl className="initialization-result" aria-label="Redis 초기화 결과">
+                  <div><dt>이벤트</dt><dd>#{initializationResult.eventId}</dd></div>
+                  <div><dt>결과</dt><dd>{initializationResult.result}</dd></div>
+                  <div><dt>초기 재고</dt><dd>{initializationResult.totalStock?.toLocaleString()}장</dd></div>
+                  <div><dt>발급 기간</dt><dd>{formatDate(initializationResult.openAt)} ~ {formatDate(initializationResult.closeAt)}</dd></div>
+                </dl>
+              )}
+            </section>
           </section>
         )}
 
         {activeTab === 'operations' && <>
-        <CampaignMonitor />
+        <CampaignMonitor
+          key={operationCampaign?.eventId ?? 'default'}
+          selectedEventId={operationCampaign?.eventId}
+        />
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
           <div className="traffic-intro">
@@ -698,13 +1010,7 @@ function App() {
               </div>
             </div>
 
-            <form
-              className="traffic-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                runLoadSimulation()
-              }}
-            >
+            <form className="traffic-form" onSubmit={handleLoadSimulationSubmit}>
               <label>
                 캠페인 ID
                 <input
@@ -712,8 +1018,9 @@ function App() {
                   min="1"
                   step="1"
                   value={loadEventId}
-                  onChange={(event) => setLoadEventId(event.target.value)}
-                  disabled={loadResult.running}
+                  readOnly
+                  aria-readonly="true"
+                  placeholder="캠페인 생성 후 자동 입력"
                 />
               </label>
               <label>
@@ -744,7 +1051,7 @@ function App() {
                   요청 중단
                 </button>
               ) : (
-                <button className="traffic-start-button" type="submit">
+                <button className="traffic-start-button" type="submit" disabled={!operationCampaign}>
                   <span className="traffic-play">▶</span>
                   20,000명 참여 시작
                 </button>
@@ -833,7 +1140,7 @@ function App() {
                 <span className="section-number">01</span>
                 <h2>쿠폰 발급</h2>
               </div>
-              <span className="api-chip">POST · /issues</span>
+              <span className="api-chip">POST · /api/v1/events/{'{eventId}'}/issues</span>
             </div>
 
             <div className="coupon-preview">
@@ -860,8 +1167,9 @@ function App() {
                   min="1"
                   step="1"
                   value={eventId}
-                  onChange={(event) => setEventId(event.target.value)}
-                  placeholder="예: 1"
+                  readOnly
+                  aria-readonly="true"
+                  placeholder="캠페인 생성 후 자동 입력"
                 />
               </label>
               <label>
@@ -875,12 +1183,14 @@ function App() {
                   placeholder="예: 10001"
                 />
               </label>
-              <button className="primary-button" type="submit" disabled={submitting}>
+              <button className="primary-button" type="submit" disabled={submitting || !operationCampaign}>
                 {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
                 <span>→</span>
               </button>
             </form>
-            <p className="form-help">새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.</p>
+            <p className="form-help">
+              캠페인 관리에서 새 이벤트를 생성하면 ID가 자동 입력됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
+            </p>
           </article>
 
           <article className="panel user-panel">
