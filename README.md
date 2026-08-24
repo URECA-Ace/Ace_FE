@@ -1,16 +1,65 @@
-# React + Vite
+# Ace_FE
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+LG U+ 프리덤 데이의 데이터 하루 무제한 쿠폰 발급 흐름을 시연하기 위한 관리자 대시보드입니다.
 
-Currently, two official plugins are available:
+## 실행
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+기본 개발 서버는 `http://localhost:5173`, 백엔드 프록시 대상은 `http://localhost:8080`입니다. 다른 백엔드를 사용하려면 실행 전에 `VITE_API_TARGET`을 지정합니다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+브라우저에서 백엔드로 직접 호출하는 배포 환경은 `.env`에 다음 값을 설정할 수 있습니다.
 
-## Expanding the ESLint configuration
+```properties
+VITE_API_BASE_URL=http://localhost:8080
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 현재 연동 API
+
+- `POST /api/v1/events/{eventId}/issues`: 사용자 쿠폰 발급 요청
+- `GET /api/v1/events/{eventId}/issues/{requestId}`: 비동기 발급 상태 조회
+- `GET /api/v1/events/{eventId}/issuance-stats`: Redis 기반 실시간 캠페인 발급 현황 조회
+
+발급 상태가 `ACCEPTED` 또는 `PROCESSING`이면 3초 간격으로 자동 조회합니다. 발급 이력과 상태 타임라인은 이 화면에서 받은 실제 API 응답을 브라우저 로컬 스토리지에 보관한 시연용 기록입니다.
+
+## 실시간 발급 현황 관제
+
+관리자 화면에서 캠페인 ID를 입력하고 실시간 관제를 시작하면 발급 현황 API를 1초 간격으로 조회합니다. 다음 정보를 확인할 수 있습니다.
+
+- 캠페인의 현재 `SCHEDULED`, `OPEN`, `SOLD_OUT`, `CLOSED` 상태
+- 전체 재고, Redis 배정 수량, 남은 재고와 배정률
+- Redis 서버 관측 시각
+- 존재하지 않는 캠페인 및 Redis 현황 일시 조회 불가 오류
+
+## 예약 오픈 상태 관제
+
+실시간 관제 중 캠페인의 `SCHEDULED`, `OPEN`, `SOLD_OUT`, `CLOSED` 상태 전환을 감지해 시간순으로 기록합니다. 예약 시각이 되면 백엔드 스케줄러가 DB 상태를 `OPEN`으로 전환하고, Redis 현황 API의 상태도 `OPEN`으로 관측되는 시점에 화면에 반영됩니다.
+
+현재 발급 현황 API에는 예약 오픈 시각이 포함되지 않으므로 프론트에서 임의의 카운트다운을 만들거나 상태를 변경하지 않습니다. 프론트는 백엔드가 제공하는 상태와 Redis 서버 관측 시각만 표시합니다.
+
+## 선착순 트래픽 시뮬레이션
+
+관리자 화면의 `20,000명 참여 시작` 버튼은 지정한 사용자 ID부터 20,000명의 고유 사용자를 생성합니다. 각 사용자는 동일 캠페인에 쿠폰 발급을 한 번씩 요청하며, 재고가 10,000장이므로 최대 10,000명만 쿠폰을 발급받습니다. 기본 동시 작업자 수는 128개이며 화면에서 1~300 사이로 조절할 수 있습니다.
+
+재고가 정확히 10,000장인 신규 캠페인을 사용하면 다음 결과를 정상 기준으로 판정합니다.
+
+- `ACCEPTED`: 10,000건
+- `SOLD_OUT`: 10,000건
+- 중복 및 기타 오류: 0건
+- 초과 발급: 0건
+
+실행 중 참여자 진행률, 승인·소진·중복·오류 건수, 클라이언트 관측 처리량과 소요 시간을 확인하거나 요청을 중단할 수 있습니다. 참여자 20,000명의 개별 결과는 브라우저 성능과 저장 공간을 보호하기 위해 사용자별 이력에 저장하지 않고 집계만 유지합니다.
+
+이 기능은 브라우저에서 실제 HTTP API 트래픽을 발생시키는 시연용 트리거입니다. 결과에 표시되는 requests/sec는 브라우저부터 API까지의 클라이언트 관측값이므로 Redis Lua 단독 벤치마크나 JMeter의 서버 성능 지표와 동일하게 해석하면 안 됩니다.
+
+사용·취소·만료 처리 및 서버 기준 전체 이력 조회는 `Ace_BE`의 대응 API가 추가된 이후 연결해야 합니다. 현재 버튼은 잘못된 성공 상태를 만들지 않도록 비활성화되어 있습니다.
+
+## 검증
+
+```bash
+npm run lint
+npm run build
+```
