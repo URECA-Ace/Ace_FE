@@ -14,6 +14,7 @@ import ScheduledOpenTimeline from './components/ScheduledOpenTimeline'
 import './App.css'
 
 const STORAGE_KEY = 'ace-manager-issue-records'
+const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
@@ -102,6 +103,27 @@ function loadRecords() {
   }
 }
 
+function loadWorkspace() {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_STORAGE_KEY)
+    if (!stored) return {}
+    const parsed = JSON.parse(stored)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function mergeCoupons(serverCoupons, savedCoupons) {
+  const merged = new Map()
+  ;[...serverCoupons, ...savedCoupons].forEach((coupon) => {
+    if (coupon?.couponId !== null && coupon?.couponId !== undefined) {
+      merged.set(String(coupon.couponId), coupon)
+    }
+  })
+  return [...merged.values()]
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -165,13 +187,15 @@ function mergeStatus(record, data, source = 'POLL') {
 }
 
 function App() {
+  const [initialWorkspace] = useState(loadWorkspace)
+  const hasSavedCouponsRef = useRef(normalizeCoupons(initialWorkspace.coupons).length > 0)
   const [records, setRecords] = useState(loadRecords)
   const [selectedId, setSelectedId] = useState(() => loadRecords()[0]?.id ?? null)
-  const [eventId, setEventId] = useState('')
+  const [eventId, setEventId] = useState(() => String(initialWorkspace.operationCampaign?.eventId ?? ''))
   const [userId, setUserId] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState(null)
-  const [loadEventId, setLoadEventId] = useState('')
+  const [loadEventId, setLoadEventId] = useState(() => String(initialWorkspace.operationCampaign?.eventId ?? ''))
   const [startUserId, setStartUserId] = useState('1001')
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY))
   const [loadResult, setLoadResult] = useState(INITIAL_LOAD_RESULT)
@@ -180,22 +204,24 @@ function App() {
   const [couponValue, setCouponValue] = useState('0')
   const [validHours, setValidHours] = useState('24')
   const [creatingCoupon, setCreatingCoupon] = useState(false)
-  const [coupons, setCoupons] = useState([])
+  const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
-  const [selectedCouponId, setSelectedCouponId] = useState('')
+  const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
   const [loadingCoupons, setLoadingCoupons] = useState(true)
-  const [createdCoupon, setCreatedCoupon] = useState(null)
+  const [createdCoupon, setCreatedCoupon] = useState(initialWorkspace.createdCoupon ?? null)
   const [totalStock, setTotalStock] = useState('10000')
   const [scheduleMode, setScheduleMode] = useState('immediate')
   const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
   const [closeAt, setCloseAt] = useState(DEFAULT_EVENT_FORM.closeAt)
   const [creatingEvent, setCreatingEvent] = useState(false)
-  const [createdEvent, setCreatedEvent] = useState(null)
-  const [initializationEventId, setInitializationEventId] = useState('')
+  const [createdEvent, setCreatedEvent] = useState(initialWorkspace.createdEvent ?? null)
+  const [initializationEventId, setInitializationEventId] = useState(
+    () => String(initialWorkspace.operationCampaign?.eventId ?? ''),
+  )
   const [initializingCampaign, setInitializingCampaign] = useState(false)
   const [initializationResult, setInitializationResult] = useState(null)
-  const [operationCampaign, setOperationCampaign] = useState(null)
-  const [activeTab, setActiveTab] = useState('campaigns')
+  const [operationCampaign, setOperationCampaign] = useState(initialWorkspace.operationCampaign ?? null)
+  const [activeTab, setActiveTab] = useState(initialWorkspace.activeTab ?? 'campaigns')
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
@@ -216,21 +242,38 @@ function App() {
     const controller = new AbortController()
     getCoupons(controller.signal)
       .then((data) => {
-        const nextCoupons = normalizeCoupons(data)
-        setCoupons(nextCoupons)
-        setSelectedCouponId((current) => current || String(nextCoupons[0]?.couponId ?? ''))
+        const serverCoupons = normalizeCoupons(data)
+        setCoupons((currentCoupons) => mergeCoupons(serverCoupons, currentCoupons))
+        setSelectedCouponId((current) => current || String(serverCoupons[0]?.couponId ?? ''))
       })
       .catch(() => {
-        if (!controller.signal.aborted) setNotice({
-          tone: 'danger',
-          message: '현재 만들어진 쿠폰 목록을 불러오지 못했습니다.',
-        })
+        if (!controller.signal.aborted && !hasSavedCouponsRef.current) {
+          setNotice({
+            tone: 'danger',
+            message: '쿠폰 목록 API를 사용할 수 없습니다. 새 쿠폰을 생성하면 이 브라우저에 저장됩니다.',
+          })
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingCoupons(false)
       })
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({
+        coupons,
+        selectedCouponId,
+        createdCoupon,
+        createdEvent,
+        operationCampaign,
+        activeTab,
+      }))
+    } catch {
+      // 브라우저 저장소가 제한돼도 서버 API 기능은 유지한다.
+    }
+  }, [coupons, selectedCouponId, createdCoupon, createdEvent, operationCampaign, activeTab])
 
   useEffect(() => {
     try {
