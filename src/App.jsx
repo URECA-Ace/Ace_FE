@@ -20,7 +20,7 @@ const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
 const LOAD_USER_ID_START = 1001
-const CAMPAIGN_REFRESH_INTERVAL_MS = 5000
+const CAMPAIGN_REFRESH_INTERVAL_MS = 30000
 
 function toDateTimeLocal(date) {
   const pad = (value) => String(value).padStart(2, '0')
@@ -286,6 +286,11 @@ function App() {
   const selectedLoadCampaign = openCampaigns.find(
     (campaign) => String(campaign.eventId) === String(loadEventId),
   )
+  const selectedPendingId = selected?.requestId && PENDING_STATUSES.has(selected.status)
+    ? selected.id
+    : null
+  const selectedPendingEventId = selectedPendingId ? selected.eventId : null
+  const selectedPendingRequestId = selectedPendingId ? selected.requestId : null
   const currentCampaignRecords = records.filter(
     (record) => String(record.eventId) === String(selectedIssueCampaign?.eventId),
   )
@@ -380,22 +385,32 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    let errorReported = false
+    let refreshTimer = null
+    let disposed = false
+
+    function scheduleNextRefresh() {
+      if (!disposed) {
+        refreshTimer = window.setTimeout(refreshCampaigns, CAMPAIGN_REFRESH_INTERVAL_MS)
+      }
+    }
 
     async function refreshCampaigns() {
+      if (disposed || controller.signal.aborted) return
+      if (document.hidden) {
+        scheduleNextRefresh()
+        return
+      }
+
       try {
-        const [allData, openData] = await Promise.all([
-          getRecentCouponEvents(null, controller.signal),
-          getRecentCouponEvents('OPEN', controller.signal),
-        ])
-        const campaigns = normalizeCampaigns(allData)
-        const openEvents = normalizeCampaigns(openData)
+        const data = await getRecentCouponEvents(null, controller.signal)
+        const campaigns = normalizeCampaigns(data)
+        const openEvents = campaigns.filter((campaign) => campaign.status === 'OPEN')
         setRecentCampaigns(campaigns)
         setOpenCampaigns(openEvents)
-        errorReported = false
         if (campaigns.length === 0) {
           setEventId('')
           setLoadEventId('')
+          scheduleNextRefresh()
           return
         }
 
@@ -414,24 +429,22 @@ function App() {
         setInitializationEventId((current) => campaigns.some(
           (campaign) => String(campaign.eventId) === String(current),
         ) ? current : String(preferred.eventId))
+        scheduleNextRefresh()
       } catch (error) {
         if (controller.signal.aborted) return
-        if (!errorReported) {
-          const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
-          setNotice({
-            tone: 'danger',
-            message: `최근 발급 회차를 불러오지 못했습니다. ${ERROR_LABELS[apiError.code] ?? apiError.message}`,
-          })
-          errorReported = true
-        }
+        const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+        setNotice({
+          tone: 'danger',
+          message: `최근 발급 회차를 불러오지 못했습니다. ${ERROR_LABELS[apiError.code] ?? apiError.message}`,
+        })
       }
     }
 
     refreshCampaigns()
-    const timer = window.setInterval(refreshCampaigns, CAMPAIGN_REFRESH_INTERVAL_MS)
 
     return () => {
-      window.clearInterval(timer)
+      disposed = true
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer)
       controller.abort()
     }
   }, [initialWorkspace])
@@ -464,28 +477,41 @@ function App() {
   }, [records])
 
   useEffect(() => {
-    const pending = records.filter(
-      (record) => record.requestId && PENDING_STATUSES.has(record.status),
-    )
-    if (pending.length === 0) return undefined
+    if (!selectedPendingId || !selectedPendingEventId || !selectedPendingRequestId) {
+      return undefined
+    }
 
-    const timer = window.setInterval(() => {
-      pending.forEach(async (record) => {
-        try {
-          const data = await getIssueStatus(record.eventId, record.requestId)
-          setRecords((current) =>
-            current.map((item) =>
-              item.id === record.id ? mergeStatus(item, data) : item,
-            ),
-          )
-        } catch {
-          // 자동 조회 실패는 기존 판정 결과를 유지하고 수동 새로고침에 맡긴다.
-        }
-      })
-    }, 3000)
+    const controller = new AbortController()
+    let requestInFlight = false
 
-    return () => window.clearInterval(timer)
-  }, [records])
+    async function refreshPendingStatus() {
+      if (document.hidden || requestInFlight || controller.signal.aborted) return
+      requestInFlight = true
+      try {
+        const data = await getIssueStatus(
+          selectedPendingEventId,
+          selectedPendingRequestId,
+          controller.signal,
+        )
+        setRecords((current) =>
+          current.map((item) =>
+            item.id === selectedPendingId ? mergeStatus(item, data) : item,
+          ),
+        )
+      } catch {
+        // 선택한 요청의 자동 조회 실패는 기존 판정 결과를 유지하고 수동 새로고침에 맡긴다.
+      } finally {
+        requestInFlight = false
+      }
+    }
+
+    const timer = window.setInterval(refreshPendingStatus, 3000)
+
+    return () => {
+      window.clearInterval(timer)
+      controller.abort()
+    }
+  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId])
 
   const summary = useMemo(() => {
     const accepted = records.filter((record) =>

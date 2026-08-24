@@ -99,7 +99,12 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     pollingControllerRef.current = controller
 
     async function poll() {
-      if (!monitoringActiveRef.current || controller.signal.aborted || requestInFlightRef.current) return
+      if (
+        document.hidden
+        || !monitoringActiveRef.current
+        || controller.signal.aborted
+        || requestInFlightRef.current
+      ) return
       requestInFlightRef.current = true
       try {
         await readStats(monitoredEventId, controller.signal)

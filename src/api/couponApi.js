@@ -61,9 +61,10 @@ export function issueCoupon(eventId, userId, idempotencyKey, signal) {
   })
 }
 
-export function getIssueStatus(eventId, requestId) {
+export function getIssueStatus(eventId, requestId, signal) {
   return request(`/api/v1/events/${eventId}/issues/${requestId}`, {
     method: 'GET',
+    signal,
     headers: { Accept: 'application/json' },
   })
 }
