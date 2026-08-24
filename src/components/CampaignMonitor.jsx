@@ -46,8 +46,9 @@ function formatObservedAt(value) {
   }).format(date)
 }
 
-function CampaignMonitor({ selectedEventId }) {
-  const [eventId, setEventId] = useState(() => String(selectedEventId ?? ''))
+function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
+  const defaultEventId = recentCampaigns[0]?.eventId ?? selectedEventId
+  const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
   const [monitoredEventId, setMonitoredEventId] = useState(null)
   const [stats, setStats] = useState(null)
   const [polling, setPolling] = useState(false)
@@ -108,6 +109,11 @@ function CampaignMonitor({ selectedEventId }) {
     }
   }, [monitoredEventId, polling, readStats])
 
+  useEffect(() => {
+    const nextEventId = recentCampaigns[0]?.eventId ?? selectedEventId
+    if (nextEventId && !polling) setEventId(String(nextEventId))
+  }, [recentCampaigns, selectedEventId, polling])
+
   useEffect(() => () => {
     pollingControllerRef.current?.abort()
     if (pollingTimeoutRef.current !== null) {
@@ -140,10 +146,13 @@ function CampaignMonitor({ selectedEventId }) {
     setPolling(true)
   }
 
+  const selectedCampaign = recentCampaigns.find(
+    (campaign) => String(campaign.eventId) === String(eventId),
+  )
   const statusMeta = CAMPAIGN_STATUS[stats?.status] ?? {
     label: '조회 대기',
     tone: 'idle',
-    description: '캠페인 ID를 입력하고 실시간 관제를 시작하세요.',
+    description: '최근 발급 회차를 선택하고 실시간 관제를 시작하세요.',
   }
   const allocationRate = stats?.totalStock > 0
     ? Math.min((stats.allocatedQuantity / stats.totalStock) * 100, 100)
@@ -158,18 +167,22 @@ function CampaignMonitor({ selectedEventId }) {
           <p>Redis 서버 기준 발급 상태와 재고 변화를 1초 간격으로 조회합니다.</p>
         </div>
         <form className="monitor-form" onSubmit={startMonitoring}>
-          <label htmlFor="monitor-event-id">캠페인 ID</label>
+          <label htmlFor="monitor-event-id">관제할 발급 회차</label>
           <div>
-            <input
+            <select
               id="monitor-event-id"
-              type="number"
-              min="1"
-              step="1"
               value={eventId}
               onChange={(event) => setEventId(event.target.value)}
-              placeholder="먼저 캠페인을 생성하세요"
               disabled={polling}
-            />
+            >
+              {recentCampaigns.length > 0 ? recentCampaigns.map((campaign) => (
+                <option key={campaign.eventId} value={campaign.eventId}>
+                  {campaign.round ?? 1}회차 · 캠페인 #{campaign.eventId}
+                </option>
+              )) : (
+                <option value="">먼저 발급 회차를 생성하세요</option>
+              )}
+            </select>
             {polling ? (
               <button type="button" className="monitor-stop" onClick={stopMonitoring}>
                 관제 중지
@@ -188,7 +201,7 @@ function CampaignMonitor({ selectedEventId }) {
           <div className="campaign-state-heading">
             <span className="state-live-dot" />
             <div>
-              <small>CAMPAIGN #{monitoredEventId ?? '-'}</small>
+              <small>CAMPAIGN #{monitoredEventId ?? '-'} · {selectedCampaign?.round ?? '-'}회차</small>
               <strong>{statusMeta.label}</strong>
             </div>
             {polling && <span className="polling-chip">LIVE · 1s</span>}

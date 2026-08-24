@@ -1106,7 +1106,8 @@ h1 {
   gap: 8px;
 }
 
-.monitor-form input {
+.monitor-form input,
+.monitor-form select {
   width: 100%;
   height: 39px;
   padding: 0 11px;
@@ -1117,7 +1118,8 @@ h1 {
   font-size: 11px;
 }
 
-.monitor-form input:disabled {
+.monitor-form input:disabled,
+.monitor-form select:disabled {
   color: #8e8791;
   background: #f2eff3;
 }

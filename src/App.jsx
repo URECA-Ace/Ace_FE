@@ -125,6 +125,11 @@ function getSavedCouponRounds(workspace) {
   return { [couponId]: Number(event.round) + 1 }
 }
 
+function getSavedCampaigns(workspace) {
+  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 5)
+  return workspace.operationCampaign ? [workspace.operationCampaign] : []
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -226,6 +231,7 @@ function App() {
   const [closeAt, setCloseAt] = useState(DEFAULT_EVENT_FORM.closeAt)
   const [creatingEvent, setCreatingEvent] = useState(false)
   const [createdEvent, setCreatedEvent] = useState(initialWorkspace.createdEvent ?? null)
+  const [recentCampaigns, setRecentCampaigns] = useState(() => getSavedCampaigns(initialWorkspace))
   const [initializationEventId, setInitializationEventId] = useState(
     () => String(initialWorkspace.operationCampaign?.eventId ?? ''),
   )
@@ -327,13 +333,14 @@ function App() {
         createdCoupon,
         couponRounds,
         createdEvent,
+        recentCampaigns,
         operationCampaign,
         activeTab,
       }))
     } catch {
       // 브라우저 저장소가 제한돼도 서버 API 기능은 유지한다.
     }
-  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, couponRounds, createdEvent, operationCampaign, activeTab])
+  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, couponRounds, createdEvent, recentCampaigns, operationCampaign, activeTab])
 
   useEffect(() => {
     try {
@@ -773,6 +780,10 @@ function App() {
 
       const newEventId = data.eventId
       setCreatedEvent(data)
+      setRecentCampaigns((current) => [
+        data,
+        ...current.filter((campaign) => String(campaign.eventId) !== String(data.eventId)),
+      ].slice(0, 5))
       if (Number.isSafeInteger(Number(data.round))) {
         setCouponRounds((current) => ({
           ...current,
@@ -1197,6 +1208,7 @@ function App() {
         <CampaignMonitor
           key={operationCampaign?.eventId ?? 'default'}
           selectedEventId={operationCampaign?.eventId}
+          recentCampaigns={recentCampaigns}
         />
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
