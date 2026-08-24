@@ -1695,7 +1695,7 @@ function App() {
                 <span>{currentCampaignRecords.length.toLocaleString()}</span>
               </button>
             </div>
-            <div className="table-wrap">
+            <div className="table-wrap history-table-wrap">
               <table>
                 <thead>
                   <tr>

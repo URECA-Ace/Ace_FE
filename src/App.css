@@ -2159,6 +2159,17 @@ h2 {
   overflow-x: auto;
 }
 
+.history-table-wrap {
+  max-height: 840px;
+  overflow: auto;
+}
+
+.history-table-wrap thead {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+}
+
 .history-scope-tabs {
   margin-bottom: 12px;
   padding: 3px;
@@ -2247,7 +2258,7 @@ tbody tr:hover {
 }
 
 .timeline {
-  max-height: 252px;
+  max-height: 840px;
   margin: 0;
   padding: 0 2px 0 8px;
   list-style: none;
