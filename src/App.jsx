@@ -186,6 +186,7 @@ function App() {
   const [loadingCoupons, setLoadingCoupons] = useState(true)
   const [createdCoupon, setCreatedCoupon] = useState(null)
   const [totalStock, setTotalStock] = useState('10000')
+  const [scheduleMode, setScheduleMode] = useState('immediate')
   const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
   const [closeAt, setCloseAt] = useState(DEFAULT_EVENT_FORM.closeAt)
   const [creatingEvent, setCreatingEvent] = useState(false)
@@ -633,7 +634,9 @@ function App() {
     event.preventDefault()
     const parsedCouponId = Number(selectedCoupon?.couponId)
     const parsedTotalStock = Number(totalStock)
-    const openDate = new Date(openAt)
+    const openDate = scheduleMode === 'immediate'
+      ? new Date(Date.now() - 60_000)
+      : new Date(openAt)
     const closeDate = new Date(closeAt)
 
     if (!Number.isSafeInteger(parsedCouponId) || parsedCouponId <= 0) {
@@ -896,10 +899,20 @@ function App() {
                   <small>{createdCoupon.type} · 혜택 {createdCoupon.value} · 발급 후 {createdCoupon.validHours}시간</small>
                 </div>
               )}
+            </section>
+
+            <section className="panel event-create-panel" aria-labelledby="event-create-title">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-number">01</span>
+                  <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
+                </div>
+                <span className="api-chip">POST · /api/v1/coupons/{'{couponId}'}/events</span>
+              </div>
               <div className="coupon-catalog" aria-labelledby="coupon-catalog-title">
                 <div className="catalog-heading">
                   <div>
-                    <strong id="coupon-catalog-title">생성된 쿠폰 목록</strong>
+                    <strong id="coupon-catalog-title">발급할 쿠폰 선택</strong>
                     <small>{coupons.length.toLocaleString()}개 쿠폰</small>
                   </div>
                   <input
@@ -919,7 +932,10 @@ function App() {
                         key={coupon.couponId}
                         type="button"
                         className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
-                        onClick={() => setSelectedCouponId(String(coupon.couponId))}
+                        onClick={() => {
+                          setSelectedCouponId(String(coupon.couponId))
+                          setCreatedEvent(null)
+                        }}
                       >
                         <span>
                           <strong>{coupon.couponName}</strong>
@@ -932,16 +948,6 @@ function App() {
                 ) : (
                   <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
                 )}
-              </div>
-            </section>
-
-            <section className="panel event-create-panel" aria-labelledby="event-create-title">
-              <div className="panel-heading">
-                <div>
-                  <span className="section-number">01</span>
-                  <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
-                </div>
-                <span className="api-chip">POST · /api/v1/coupons/{'{couponId}'}/events</span>
               </div>
               <form className="event-create-form" onSubmit={createEvent}>
                 <label>
@@ -956,7 +962,7 @@ function App() {
                 <label>
                   회차
                   <input
-                    value={createdEvent ? `${createdEvent.round ?? '-'}회차` : '서버에서 자동 배정'}
+                    value={`${createdEvent?.round ?? 1}회차`}
                     readOnly
                     aria-readonly="true"
                     title="쿠폰별 마지막 회차 다음 번호가 서버 트랜잭션에서 배정됩니다."
@@ -968,15 +974,37 @@ function App() {
                 </label>
                 <fieldset className="schedule-settings">
                   <legend>예약 오픈 설정</legend>
-                  <p>설정한 오픈 시각부터 쿠폰 발급이 가능해집니다.</p>
+                  <div className="schedule-mode-options">
+                    <label>
+                      <input
+                        type="radio"
+                        name="schedule-mode"
+                        value="immediate"
+                        checked={scheduleMode === 'immediate'}
+                        onChange={(event) => setScheduleMode(event.target.value)}
+                      />
+                      지금 바로 발급
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="schedule-mode"
+                        value="scheduled"
+                        checked={scheduleMode === 'scheduled'}
+                        onChange={(event) => setScheduleMode(event.target.value)}
+                      />
+                      예약 오픈
+                    </label>
+                  </div>
+                  <p>{scheduleMode === 'scheduled' ? '설정한 오픈 시각부터 쿠폰 발급이 가능해집니다.' : '생성 즉시 쿠폰 발급이 가능한 상태로 설정됩니다.'}</p>
                   <div className="schedule-settings-fields">
                     <label>
                       오픈 시각
-                      <input type="datetime-local" value={openAt} onChange={(event) => setOpenAt(event.target.value)} required />
+                      <input type="datetime-local" value={openAt} onChange={(event) => setOpenAt(event.target.value)} disabled={scheduleMode !== 'scheduled'} required={scheduleMode === 'scheduled'} />
                     </label>
                     <label>
                       마감 시각
-                      <input type="datetime-local" value={closeAt} onChange={(event) => setCloseAt(event.target.value)} required />
+                      <input type="datetime-local" value={closeAt} onChange={(event) => setCloseAt(event.target.value)} disabled={scheduleMode !== 'scheduled'} required={scheduleMode === 'scheduled'} />
                     </label>
                   </div>
                 </fieldset>
