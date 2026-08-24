@@ -6,6 +6,7 @@ import {
   getCoupons,
   getIssueStatus,
   getIssuanceStats,
+  getRecentCouponEvents,
   initializeCampaign,
   issueCoupon,
 } from './api/couponApi'
@@ -18,6 +19,8 @@ const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
+const LOAD_USER_ID_START = 1001
+const CAMPAIGN_REFRESH_INTERVAL_MS = 30000
 
 function toDateTimeLocal(date) {
   const pad = (value) => String(value).padStart(2, '0')
@@ -114,6 +117,22 @@ function loadWorkspace() {
   }
 }
 
+function getSavedCouponRounds(workspace) {
+  if (workspace.couponRounds && typeof workspace.couponRounds === 'object') {
+    return workspace.couponRounds
+  }
+
+  const event = workspace.createdEvent
+  const couponId = event?.couponId ?? workspace.selectedCouponId
+  if (!couponId || !Number.isSafeInteger(Number(event?.round))) return {}
+  return { [couponId]: Number(event.round) + 1 }
+}
+
+function getSavedCampaigns(workspace) {
+  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 5)
+  return workspace.operationCampaign ? [workspace.operationCampaign] : []
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -137,6 +156,27 @@ function normalizeCoupons(data) {
   if (Array.isArray(data?.content)) return data.content
   if (Array.isArray(data?.items)) return data.items
   return []
+}
+
+function normalizeCampaigns(data) {
+  if (!Array.isArray(data)) return []
+  return data.filter((campaign) => campaign?.eventId).slice(0, 5)
+}
+
+function campaignLabel(campaign) {
+  if (!campaign) return '발급 회차를 선택하세요'
+  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차(${campaign.eventId})`
+}
+
+function recordCampaignLabel(record, campaigns) {
+  const campaign = campaigns.find(
+    (item) => String(item.eventId) === String(record.eventId),
+  )
+  return campaignLabel({
+    eventId: record.eventId,
+    couponName: record.couponName ?? campaign?.couponName,
+    round: record.campaignRound ?? campaign?.round,
+  })
 }
 
 function statusMeta(status) {
@@ -186,16 +226,17 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState(null)
   const [loadEventId, setLoadEventId] = useState(() => String(initialWorkspace.operationCampaign?.eventId ?? ''))
-  const [startUserId, setStartUserId] = useState('1001')
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY))
   const [loadResult, setLoadResult] = useState(INITIAL_LOAD_RESULT)
   const [couponName, setCouponName] = useState('U+ 데이터 하루 무제한 쿠폰')
   const [couponType, setCouponType] = useState('DATA_UNLIMITED')
-  const [couponValue, setCouponValue] = useState('0')
+  const [couponValue, setCouponValue] = useState('')
   const [validHours, setValidHours] = useState('24')
   const [creatingCoupon, setCreatingCoupon] = useState(false)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
+  const [couponPickerOpen, setCouponPickerOpen] = useState(false)
+  const [issueCampaignPickerOpen, setIssueCampaignPickerOpen] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
   const [selectedCouponSnapshot, setSelectedCouponSnapshot] = useState(() => {
     const selectedId = String(initialWorkspace.selectedCouponId ?? '')
@@ -207,19 +248,28 @@ function App() {
   })
   const [loadingCoupons, setLoadingCoupons] = useState(true)
   const [createdCoupon, setCreatedCoupon] = useState(initialWorkspace.createdCoupon ?? null)
+  const [couponRounds, setCouponRounds] = useState(() => getSavedCouponRounds(initialWorkspace))
   const [totalStock, setTotalStock] = useState('10000')
   const [scheduleMode, setScheduleMode] = useState('immediate')
   const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
   const [closeAt, setCloseAt] = useState(DEFAULT_EVENT_FORM.closeAt)
   const [creatingEvent, setCreatingEvent] = useState(false)
   const [createdEvent, setCreatedEvent] = useState(initialWorkspace.createdEvent ?? null)
+  const [recentCampaigns, setRecentCampaigns] = useState(() => getSavedCampaigns(initialWorkspace))
+  const [openCampaigns, setOpenCampaigns] = useState(() => (
+    Array.isArray(initialWorkspace.openCampaigns)
+      ? initialWorkspace.openCampaigns.slice(0, 5)
+      : getSavedCampaigns(initialWorkspace).filter((campaign) => campaign.status === 'OPEN')
+  ))
   const [initializationEventId, setInitializationEventId] = useState(
     () => String(initialWorkspace.operationCampaign?.eventId ?? ''),
   )
+  const [campaignPickerOpen, setCampaignPickerOpen] = useState(false)
   const [initializingCampaign, setInitializingCampaign] = useState(false)
   const [initializationResult, setInitializationResult] = useState(null)
   const [operationCampaign, setOperationCampaign] = useState(initialWorkspace.operationCampaign ?? null)
   const [activeTab, setActiveTab] = useState(initialWorkspace.activeTab ?? 'campaigns')
+  const [historyScope, setHistoryScope] = useState('current')
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
@@ -228,8 +278,72 @@ function App() {
   ) ?? (String(selectedCouponSnapshot?.couponId) === String(selectedCouponId)
     ? selectedCouponSnapshot
     : null) ?? createdCoupon
+  const nextCouponRound = couponRounds[selectedCouponId] ?? 1
+  const campaignCandidates = recentCampaigns
+  const selectedIssueCampaign = recentCampaigns.find(
+    (campaign) => String(campaign.eventId) === String(eventId),
+  )
+  const selectedLoadCampaign = openCampaigns.find(
+    (campaign) => String(campaign.eventId) === String(loadEventId),
+  )
+  const selectedPendingId = selected?.requestId && PENDING_STATUSES.has(selected.status)
+    ? selected.id
+    : null
+  const selectedPendingEventId = selectedPendingId ? selected.eventId : null
+  const selectedPendingRequestId = selectedPendingId ? selected.requestId : null
+  const currentCampaignRecords = records.filter(
+    (record) => String(record.eventId) === String(selectedIssueCampaign?.eventId),
+  )
+  const visibleHistoryRecords = historyScope === 'current'
+    ? currentCampaignRecords
+    : records
+  const redisDecisionHistory = [...currentCampaignRecords]
+    .filter((record) => Number.isSafeInteger(Number(record.issueSequence)))
+    .sort((left, right) => Number(right.issueSequence) - Number(left.issueSequence))
+  const campaignHasStarted = selectedIssueCampaign
+    && selectedIssueCampaign.status !== 'SCHEDULED'
 
   useEffect(() => () => loadAbortRef.current?.abort(), [])
+
+  useEffect(() => {
+    if (!notice?.toast) return undefined
+
+    const timer = window.setTimeout(() => setNotice(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  useEffect(() => {
+    if (!couponPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setCouponPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [couponPickerOpen])
+
+  useEffect(() => {
+    if (!issueCampaignPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setIssueCampaignPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [issueCampaignPickerOpen])
+
+  useEffect(() => {
+    if (!campaignPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setCampaignPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [campaignPickerOpen])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -270,20 +384,89 @@ function App() {
   }, [couponSearch])
 
   useEffect(() => {
+    const controller = new AbortController()
+    let refreshTimer = null
+    let disposed = false
+
+    function scheduleNextRefresh() {
+      if (!disposed) {
+        refreshTimer = window.setTimeout(refreshCampaigns, CAMPAIGN_REFRESH_INTERVAL_MS)
+      }
+    }
+
+    async function refreshCampaigns() {
+      if (disposed || controller.signal.aborted) return
+      if (document.hidden) {
+        scheduleNextRefresh()
+        return
+      }
+
+      try {
+        const data = await getRecentCouponEvents(null, controller.signal)
+        const campaigns = normalizeCampaigns(data)
+        const openEvents = campaigns.filter((campaign) => campaign.status === 'OPEN')
+        setRecentCampaigns(campaigns)
+        setOpenCampaigns(openEvents)
+        if (campaigns.length === 0) {
+          setEventId('')
+          setLoadEventId('')
+          scheduleNextRefresh()
+          return
+        }
+
+        const preferred = openEvents.find(
+          (campaign) => String(campaign.eventId) === String(initialWorkspace.operationCampaign?.eventId),
+        ) ?? openEvents[0] ?? campaigns.find(
+          (campaign) => String(campaign.eventId) === String(initialWorkspace.operationCampaign?.eventId),
+        ) ?? campaigns[0]
+        setOperationCampaign(preferred)
+        setEventId((current) => openEvents.some(
+          (campaign) => String(campaign.eventId) === String(current),
+        ) ? current : String(preferred.eventId))
+        setLoadEventId((current) => openEvents.some(
+          (campaign) => String(campaign.eventId) === String(current),
+        ) ? current : String(openEvents[0]?.eventId ?? ''))
+        setInitializationEventId((current) => campaigns.some(
+          (campaign) => String(campaign.eventId) === String(current),
+        ) ? current : String(preferred.eventId))
+        scheduleNextRefresh()
+      } catch (error) {
+        if (controller.signal.aborted) return
+        const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+        setNotice({
+          tone: 'danger',
+          message: `최근 발급 회차를 불러오지 못했습니다. ${ERROR_LABELS[apiError.code] ?? apiError.message}`,
+        })
+      }
+    }
+
+    refreshCampaigns()
+
+    return () => {
+      disposed = true
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer)
+      controller.abort()
+    }
+  }, [initialWorkspace])
+
+  useEffect(() => {
     try {
       localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({
         coupons,
         selectedCouponId,
         selectedCouponSnapshot,
         createdCoupon,
+        couponRounds,
         createdEvent,
+        recentCampaigns,
+        openCampaigns,
         operationCampaign,
         activeTab,
       }))
     } catch {
       // 브라우저 저장소가 제한돼도 서버 API 기능은 유지한다.
     }
-  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, createdEvent, operationCampaign, activeTab])
+  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, couponRounds, createdEvent, recentCampaigns, openCampaigns, operationCampaign, activeTab])
 
   useEffect(() => {
     try {
@@ -294,28 +477,41 @@ function App() {
   }, [records])
 
   useEffect(() => {
-    const pending = records.filter(
-      (record) => record.requestId && PENDING_STATUSES.has(record.status),
-    )
-    if (pending.length === 0) return undefined
+    if (!selectedPendingId || !selectedPendingEventId || !selectedPendingRequestId) {
+      return undefined
+    }
 
-    const timer = window.setInterval(() => {
-      pending.forEach(async (record) => {
-        try {
-          const data = await getIssueStatus(record.eventId, record.requestId)
-          setRecords((current) =>
-            current.map((item) =>
-              item.id === record.id ? mergeStatus(item, data) : item,
-            ),
-          )
-        } catch {
-          // 자동 조회 실패는 기존 판정 결과를 유지하고 수동 새로고침에 맡긴다.
-        }
-      })
-    }, 3000)
+    const controller = new AbortController()
+    let requestInFlight = false
 
-    return () => window.clearInterval(timer)
-  }, [records])
+    async function refreshPendingStatus() {
+      if (document.hidden || requestInFlight || controller.signal.aborted) return
+      requestInFlight = true
+      try {
+        const data = await getIssueStatus(
+          selectedPendingEventId,
+          selectedPendingRequestId,
+          controller.signal,
+        )
+        setRecords((current) =>
+          current.map((item) =>
+            item.id === selectedPendingId ? mergeStatus(item, data) : item,
+          ),
+        )
+      } catch {
+        // 선택한 요청의 자동 조회 실패는 기존 판정 결과를 유지하고 수동 새로고침에 맡긴다.
+      } finally {
+        requestInFlight = false
+      }
+    }
+
+    const timer = window.setInterval(refreshPendingStatus, 3000)
+
+    return () => {
+      window.clearInterval(timer)
+      controller.abort()
+    }
+  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId])
 
   const summary = useMemo(() => {
     const accepted = records.filter((record) =>
@@ -345,12 +541,11 @@ function App() {
       setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
       return
     }
-    if (!operationCampaign || Number(operationCampaign.eventId) !== parsedEventId) {
+    if (!selectedIssueCampaign || Number(selectedIssueCampaign.eventId) !== parsedEventId) {
       setNotice({
         tone: 'danger',
-        message: '과거 캠페인은 발급할 수 없습니다. 캠페인 관리에서 새 이벤트를 먼저 생성하세요.',
+        message: '최근 발급 회차에서 쿠폰을 발급할 캠페인을 선택하세요.',
       })
-      setActiveTab('campaigns')
       return
     }
 
@@ -391,6 +586,8 @@ function App() {
       const next = {
         id: recordId,
         eventId: parsedEventId,
+        couponName: retryRecord?.couponName ?? selectedIssueCampaign.couponName,
+        campaignRound: retryRecord?.campaignRound ?? selectedIssueCampaign.round,
         userId: parsedUserId,
         idempotencyKey,
         requestId: retryRecord?.requestId ?? null,
@@ -484,31 +681,22 @@ function App() {
   async function handleLoadSimulationSubmit(event) {
     event.preventDefault()
     const parsedEventId = Number(loadEventId)
-    const parsedStartUserId = Number(startUserId)
+    const parsedStartUserId = LOAD_USER_ID_START
     const parsedConcurrency = Number(concurrency)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
       setNotice({ tone: 'danger', message: '부하 발급 캠페인 ID는 1 이상의 정수여야 합니다.' })
       return
     }
-    if (!Number.isSafeInteger(parsedStartUserId) || parsedStartUserId <= 0) {
-      setNotice({ tone: 'danger', message: '시작 사용자 ID는 1 이상의 정수여야 합니다.' })
-      return
-    }
-    if (!Number.isSafeInteger(parsedStartUserId + PARTICIPANT_COUNT - 1)) {
-      setNotice({ tone: 'danger', message: '마지막 사용자 ID가 안전한 정수 범위를 벗어납니다.' })
-      return
-    }
     if (!Number.isSafeInteger(parsedConcurrency) || parsedConcurrency < 1 || parsedConcurrency > 300) {
       setNotice({ tone: 'danger', message: '동시 요청 수는 1~300 사이여야 합니다.' })
       return
     }
-    if (!operationCampaign || Number(operationCampaign.eventId) !== parsedEventId) {
+    if (!selectedLoadCampaign || Number(selectedLoadCampaign.eventId) !== parsedEventId) {
       setNotice({
         tone: 'danger',
-        message: '캠페인 관리에서 트래픽 테스트용 새 이벤트를 먼저 생성하세요.',
+        message: '최근 발급 회차에서 트래픽을 실행할 캠페인을 선택하세요.',
       })
-      setActiveTab('campaigns')
       return
     }
 
@@ -675,6 +863,7 @@ function App() {
       setLoadEventId('')
       setNotice({
         tone: 'success',
+        toast: true,
         message: `쿠폰 상품 ${data.couponId}번이 생성되었습니다. 이제 1회차 발급 일정을 설정하세요.`,
       })
     } catch (error) {
@@ -720,17 +909,35 @@ function App() {
         closeAt: closeDate.toISOString(),
       })
 
-      const newEventId = data.eventId
-      setCreatedEvent(data)
-      setOperationCampaign(data)
+      const campaign = { ...data, couponName: selectedCoupon.couponName }
+      const newEventId = campaign.eventId
+      setCreatedEvent(campaign)
+      setRecentCampaigns((current) => [
+        campaign,
+        ...current.filter((item) => String(item.eventId) !== String(campaign.eventId)),
+      ].slice(0, 5))
+      if (campaign.status === 'OPEN') {
+        setOpenCampaigns((current) => [
+          campaign,
+          ...current.filter((item) => String(item.eventId) !== String(campaign.eventId)),
+        ].slice(0, 5))
+      }
+      if (Number.isSafeInteger(Number(campaign.round))) {
+        setCouponRounds((current) => ({
+          ...current,
+          [parsedCouponId]: Number(campaign.round) + 1,
+        }))
+      }
+      setOperationCampaign(campaign)
       setLoadResult(INITIAL_LOAD_RESULT)
       if (newEventId) {
         setEventId(String(newEventId))
-        setLoadEventId(String(newEventId))
+        if (campaign.status === 'OPEN') setLoadEventId(String(newEventId))
         setInitializationEventId(String(newEventId))
       }
       setNotice({
         tone: 'success',
+        toast: true,
         message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되고 Redis 재고가 초기화되었습니다. 발급 운영으로 이동했습니다.`,
       })
       setActiveTab('operations')
@@ -759,8 +966,12 @@ function App() {
     setNotice(null)
     try {
       const data = await initializeCampaign(parsedEventId)
+      const campaign = recentCampaigns.find(
+        (item) => Number(item.eventId) === parsedEventId,
+      )
+      const initializedCampaign = { ...campaign, ...data }
       setInitializationResult(data)
-      setOperationCampaign(data)
+      setOperationCampaign(initializedCampaign)
       setEventId(String(data.eventId))
       setLoadEventId(String(data.eventId))
       setNotice({
@@ -779,7 +990,7 @@ function App() {
   }
 
   const selectedMeta = statusMeta(selected?.status)
-  const expectedStock = operationCampaign?.totalStock ?? (Number(totalStock) || 0)
+  const expectedStock = selectedLoadCampaign?.totalStock ?? (Number(totalStock) || 0)
   const loadProgress = (loadResult.completed / PARTICIPANT_COUNT) * 100
   const loadThroughput = loadResult.elapsedMs > 0
     ? Math.round(loadResult.completed / (loadResult.elapsedMs / 1000))
@@ -876,7 +1087,7 @@ function App() {
         </section>
 
         {notice && (
-          <div className={`notice ${notice.tone}`} role="status">
+          <div className={`notice ${notice.tone} ${notice.toast ? 'notice-toast' : ''}`} role="status">
             <span>{notice.tone === 'danger' ? '!' : '✓'}</span>
             {notice.message}
             <button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">×</button>
@@ -914,6 +1125,7 @@ function App() {
                 <div>
                   <span className="section-number">00</span>
                   <h2 id="coupon-create-title">쿠폰 상품 생성</h2>
+                  <p className="panel-description">발급할 쿠폰의 기본 정보와 혜택을 먼저 등록합니다.</p>
                 </div>
                 <span className="api-chip">POST · /api/v1/coupons</span>
               </div>
@@ -932,8 +1144,7 @@ function App() {
                 </label>
                 <label>
                   혜택 값
-                  <input type="number" min="0" step="1" value={couponValue} onChange={(event) => setCouponValue(event.target.value)} required />
-                  <small className="form-field-help">무제한 쿠폰은 0으로 설정합니다.</small>
+                  <input type="number" min="0" step="1" value={couponValue} onChange={(event) => setCouponValue(event.target.value)} placeholder="무제한 쿠폰은 0으로 설정" required />
                 </label>
                 <label>
                   발급 후 유효 시간
@@ -961,6 +1172,7 @@ function App() {
                 <div>
                   <span className="section-number">01</span>
                   <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
+                  <p className="panel-description">쿠폰을 선택하고 재고와 발급 시작 방식을 설정해 회차를 만듭니다.</p>
                 </div>
                 <span className="api-chip">POST · /api/v1/coupons/{'{couponId}'}/events</span>
               </div>
@@ -968,44 +1180,20 @@ function App() {
                 <div className="catalog-heading">
                   <div>
                     <strong id="coupon-catalog-title">발급할 쿠폰 선택</strong>
-                    <small>{couponSearch.trim()
-                      ? `검색 결과 ${coupons.length.toLocaleString()}개`
-                      : `최근 쿠폰 ${coupons.length.toLocaleString()}개`}</small>
+                    <small>선택된 쿠폰의 회차와 재고를 설정합니다.</small>
                   </div>
-                  <input
-                    type="search"
-                    value={couponSearch}
-                    onChange={(event) => setCouponSearch(event.target.value)}
-                    placeholder="쿠폰 이름 검색"
-                    aria-label="쿠폰 이름 검색"
-                  />
                 </div>
-                {loadingCoupons ? (
-                  <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
-                ) : coupons.length > 0 ? (
-                  <div className="coupon-catalog-list">
-                    {coupons.map((coupon) => (
-                      <button
-                        key={coupon.couponId}
-                        type="button"
-                        className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedCouponId(String(coupon.couponId))
-                          setSelectedCouponSnapshot(coupon)
-                          setCreatedEvent(null)
-                        }}
-                      >
-                        <span>
-                          <strong>{coupon.couponName}</strong>
-                          <small>#{coupon.couponId} · {coupon.type}</small>
-                        </span>
-                        <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
-                )}
+                <button
+                  type="button"
+                  className="coupon-picker-trigger"
+                  onClick={() => setCouponPickerOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={couponPickerOpen}
+                >
+                  <span className="coupon-picker-trigger-icon" aria-hidden="true">⌕</span>
+                  <span>{selectedCoupon ? selectedCoupon.couponName : '쿠폰을 검색해서 선택하세요'}</span>
+                  <span className="coupon-picker-trigger-arrow" aria-hidden="true">›</span>
+                </button>
               </div>
               <form className="event-create-form" onSubmit={createEvent}>
                 <label>
@@ -1020,7 +1208,7 @@ function App() {
                 <label>
                   회차
                   <input
-                    value={`${createdEvent?.round ?? 1}회차`}
+                    value={`${nextCouponRound}회차`}
                     readOnly
                     aria-readonly="true"
                     title="쿠폰별 마지막 회차 다음 번호가 서버 트랜잭션에서 배정됩니다."
@@ -1127,20 +1315,21 @@ function App() {
                   </p>
                 </div>
                 <form className="initialization-form" onSubmit={initializeEvent}>
-                  <label htmlFor="initialization-event-id">캠페인 ID</label>
+                  <label>초기화할 캠페인</label>
                   <div>
-                    <input
-                      id="initialization-event-id"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={initializationEventId}
-                      onChange={(event) => setInitializationEventId(event.target.value)}
-                      placeholder="예: 24"
-                      required
-                    />
-                    <button className="secondary-button" type="submit" disabled={initializingCampaign}>
-                      {initializingCampaign ? '초기화 중…' : 'Redis 초기화 실행'}
+                    <button
+                      type="button"
+                      className="coupon-picker-trigger campaign-picker-trigger"
+                      onClick={() => setCampaignPickerOpen(true)}
+                      aria-haspopup="dialog"
+                      aria-expanded={campaignPickerOpen}
+                    >
+                      <span className="coupon-picker-trigger-icon" aria-hidden="true">⌕</span>
+                      <span>{campaignLabel(recentCampaigns.find((campaign) => String(campaign.eventId) === String(initializationEventId)))}</span>
+                      <span className="coupon-picker-trigger-arrow" aria-hidden="true">›</span>
+                    </button>
+                    <button className="secondary-button" type="submit" disabled={initializingCampaign || !initializationEventId}>
+                      {initializingCampaign ? 'Redis 재초기화 중…' : 'Redis 재초기화 실행'}
                     </button>
                   </div>
                 </form>
@@ -1159,8 +1348,8 @@ function App() {
 
         {activeTab === 'operations' && <>
         <CampaignMonitor
-          key={operationCampaign?.eventId ?? 'default'}
           selectedEventId={operationCampaign?.eventId}
+          recentCampaigns={openCampaigns}
         />
 
         <section className="panel traffic-panel" aria-labelledby="traffic-title">
@@ -1182,27 +1371,23 @@ function App() {
 
             <form className="traffic-form" onSubmit={handleLoadSimulationSubmit}>
               <label>
-                캠페인 ID
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
+                트래픽을 실행할 발급 회차
+                <select
                   value={loadEventId}
-                  readOnly
-                  aria-readonly="true"
-                  placeholder="캠페인 생성 후 자동 입력"
-                />
-              </label>
-              <label>
-                시작 사용자 ID
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={startUserId}
-                  onChange={(event) => setStartUserId(event.target.value)}
+                  onChange={(event) => {
+                    setLoadEventId(event.target.value)
+                    setLoadResult(INITIAL_LOAD_RESULT)
+                  }}
                   disabled={loadResult.running}
-                />
+                >
+                  {openCampaigns.length > 0 ? openCampaigns.map((campaign) => (
+                    <option key={campaign.eventId} value={campaign.eventId}>
+                      {campaignLabel(campaign)}
+                    </option>
+                  )) : (
+                    <option value="">현재 OPEN 상태인 발급 회차가 없습니다</option>
+                  )}
+                </select>
               </label>
               <label>
                 동시 작업자
@@ -1221,7 +1406,7 @@ function App() {
                   요청 중단
                 </button>
               ) : (
-                <button className="traffic-start-button" type="submit" disabled={!operationCampaign}>
+                <button className="traffic-start-button" type="submit" disabled={!selectedLoadCampaign}>
                   <span className="traffic-play">▶</span>
                   20,000명 참여 시작
                 </button>
@@ -1313,15 +1498,22 @@ function App() {
               <span className="api-chip">POST · /api/v1/events/{'{eventId}'}/issues</span>
             </div>
 
-            <div className="coupon-preview">
+            <button
+              className="coupon-preview coupon-preview-button"
+              type="button"
+              onClick={() => setIssueCampaignPickerOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={issueCampaignPickerOpen}
+              disabled={recentCampaigns.length === 0}
+            >
               <div className="coupon-brand">U<sup>+</sup></div>
               <div className="coupon-copy">
                 <span>FREEDOM DAY</span>
-                <strong>데이터 하루<br />무제한</strong>
-                <small>오늘 하루, 속도 걱정 없이 자유롭게</small>
+                <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
+                <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
               </div>
               <div className="coupon-badge">24H</div>
-            </div>
+            </button>
 
             <form
               className="issue-form"
@@ -1353,13 +1545,17 @@ function App() {
                   placeholder="예: 10001"
                 />
               </label>
-              <button className="primary-button" type="submit" disabled={submitting || !operationCampaign}>
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={submitting || selectedIssueCampaign?.status !== 'OPEN'}
+              >
                 {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
                 <span>→</span>
               </button>
             </form>
             <p className="form-help">
-              캠페인 관리에서 새 이벤트를 생성하면 ID가 자동 입력됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
+              위 쿠폰 이미지를 눌러 최근 발급 회차를 선택하면 캠페인 ID가 자동으로 고정됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
             </p>
           </article>
 
@@ -1385,7 +1581,7 @@ function App() {
                       onClick={() => setSelectedId(record.id)}
                     >
                       <span>U{record.userId}</span>
-                      <small>E{record.eventId}</small>
+                      <small>{recordCampaignLabel(record, recentCampaigns)}</small>
                     </button>
                   ))}
                 </div>
@@ -1395,7 +1591,7 @@ function App() {
                     <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
                     <div>
                       <strong>사용자 #{selected.userId}</strong>
-                      <small>캠페인 #{selected.eventId}</small>
+                      <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
                     </div>
                   </div>
                   <button
@@ -1468,7 +1664,7 @@ function App() {
         </section>
         </>}
 
-        <section className="history-grid">
+        {activeTab === 'operations' && <section className="history-grid">
           <article className="panel history-panel">
             <div className="panel-heading">
               <div>
@@ -1477,7 +1673,29 @@ function App() {
               </div>
               {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
             </div>
-            <div className="table-wrap">
+            <div className="history-scope-tabs" role="tablist" aria-label="발급 이력 조회 범위">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'all'}
+                className={historyScope === 'all' ? 'selected' : ''}
+                onClick={() => setHistoryScope('all')}
+              >
+                전체
+                <span>{records.length.toLocaleString()}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'current'}
+                className={historyScope === 'current' ? 'selected' : ''}
+                onClick={() => setHistoryScope('current')}
+              >
+                현재 캠페인
+                <span>{currentCampaignRecords.length.toLocaleString()}</span>
+              </button>
+            </div>
+            <div className="table-wrap history-table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -1489,19 +1707,25 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.length > 0 ? records.map((record) => {
+                  {visibleHistoryRecords.length > 0 ? visibleHistoryRecords.map((record) => {
                     const meta = statusMeta(record.status)
                     return (
                       <tr key={record.id} onClick={() => setSelectedId(record.id)}>
                         <td><strong>#{record.userId}</strong></td>
-                        <td>#{record.eventId}</td>
+                        <td>{recordCampaignLabel(record, recentCampaigns)}</td>
                         <td>{record.issueSequence ?? '-'}</td>
                         <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
                         <td>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</td>
                       </tr>
                     )
                   }) : (
-                    <tr><td colSpan="5" className="table-empty">API 응답 이력이 없습니다.</td></tr>
+                    <tr>
+                      <td colSpan="5" className="table-empty">
+                        {historyScope === 'current'
+                          ? '현재 캠페인의 API 응답 이력이 없습니다.'
+                          : 'API 응답 이력이 없습니다.'}
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -1515,31 +1739,208 @@ function App() {
                 <span className="section-number">04</span>
                 <h2>쿠폰 상태 이력</h2>
               </div>
-              <span className="api-chip subtle">현재 세션</span>
+              <span className="api-chip subtle">
+                {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '캠페인 선택 대기'}
+              </span>
             </div>
-            {selected?.events?.length ? (
+            {redisDecisionHistory.length > 0 || campaignHasStarted ? (
               <ol className="timeline">
-                {selected.events.map((item) => (
-                  <li key={item.id} className={item.tone}>
+                {redisDecisionHistory.map((record) => (
+                  <li key={`${record.id}:${record.issueSequence}`} className="success">
                     <span className="timeline-dot" />
                     <div>
                       <div className="timeline-title">
-                        <strong>{item.title}</strong>
-                        <time>{formatDate(item.occurredAt)}</time>
+                        <strong>Redis 판정 승인 · 발급 순번 {record.issueSequence}</strong>
+                        <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
                       </div>
-                      <p>{item.detail}</p>
+                      <p>
+                        사용자({record.userId}) · 발급 순번({record.issueSequence}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      </p>
                     </div>
                   </li>
                 ))}
+                {campaignHasStarted && (
+                  <li className="waiting">
+                    <span className="timeline-dot" />
+                    <div>
+                      <div className="timeline-title">
+                        <strong>쿠폰 회차 발급 시작</strong>
+                        <time>{formatDate(selectedIssueCampaign.openAt)}</time>
+                      </div>
+                      <p>
+                        {campaignLabel(selectedIssueCampaign)} · 초기 재고 {selectedIssueCampaign.totalStock?.toLocaleString() ?? '-'}장
+                      </p>
+                    </div>
+                  </li>
+                )}
               </ol>
             ) : (
               <div className="empty-state small">
                 <strong>표시할 상태 변경이 없습니다</strong>
-                <p>발급 요청 이후 판정과 저장 상태가 시간순으로 표시됩니다.</p>
+                <p>현재 캠페인의 Redis 발급 판정 승인이 발급 순번순으로 표시됩니다.</p>
               </div>
             )}
           </article>
-        </section>
+        </section>}
+
+        {couponPickerOpen && (
+          <div
+            className="coupon-picker-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setCouponPickerOpen(false)
+            }}
+          >
+            <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="coupon-picker-title">
+              <div className="coupon-picker-header">
+                <div>
+                  <span className="eyebrow">COUPON SELECT</span>
+                  <h2 id="coupon-picker-title">발급할 쿠폰 선택</h2>
+                  <p>쿠폰 제목을 검색하거나 최근 생성한 쿠폰을 선택하세요.</p>
+                </div>
+                <button type="button" className="coupon-picker-close" onClick={() => setCouponPickerOpen(false)} aria-label="쿠폰 선택 창 닫기">×</button>
+              </div>
+              <label className="coupon-picker-search">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  type="search"
+                  value={couponSearch}
+                  onChange={(event) => setCouponSearch(event.target.value)}
+                  placeholder="쿠폰 제목 검색"
+                  aria-label="쿠폰 제목 검색"
+                  autoFocus
+                />
+              </label>
+              <div className="coupon-picker-list-heading">
+                <strong>{couponSearch.trim() ? '검색 결과' : '최근 생성한 쿠폰'}</strong>
+                <small>{coupons.length.toLocaleString()}개</small>
+              </div>
+              {loadingCoupons ? (
+                <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
+              ) : coupons.length > 0 ? (
+                <div className="coupon-catalog-list coupon-picker-list">
+                  {coupons.map((coupon) => (
+                    <button
+                      key={coupon.couponId}
+                      type="button"
+                      className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedCouponId(String(coupon.couponId))
+                        setSelectedCouponSnapshot(coupon)
+                        setCreatedEvent(null)
+                        setCouponPickerOpen(false)
+                      }}
+                    >
+                      <span>
+                        <strong>{coupon.couponName}</strong>
+                        <small>#{coupon.couponId} · {coupon.type}</small>
+                      </span>
+                      <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
+              )}
+              <button type="button" className="coupon-picker-cancel" onClick={() => setCouponPickerOpen(false)}>닫기</button>
+            </section>
+          </div>
+        )}
+
+        {issueCampaignPickerOpen && (
+          <div
+            className="coupon-picker-backdrop"
+            role="presentation"
+            onMouseDown={(clickEvent) => {
+              if (clickEvent.target === clickEvent.currentTarget) setIssueCampaignPickerOpen(false)
+            }}
+          >
+            <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="issue-campaign-picker-title">
+              <div className="coupon-picker-header">
+                <div>
+                  <span className="eyebrow">ISSUE CAMPAIGN SELECT</span>
+                  <h2 id="issue-campaign-picker-title">발급할 쿠폰 선택</h2>
+                  <p>최근 생성된 발급 회차 5개 중 쿠폰을 발급할 회차를 선택하세요.</p>
+                </div>
+                <button type="button" className="coupon-picker-close" onClick={() => setIssueCampaignPickerOpen(false)} aria-label="발급 쿠폰 선택 창 닫기">×</button>
+              </div>
+              {recentCampaigns.length > 0 ? (
+                <div className="coupon-catalog-list coupon-picker-list">
+                  {recentCampaigns.map((campaign) => (
+                    <button
+                      key={campaign.eventId}
+                      type="button"
+                      className={`coupon-catalog-item ${String(campaign.eventId) === String(eventId) ? 'selected' : ''}`}
+                      disabled={campaign.status !== 'OPEN'}
+                      onClick={() => {
+                        setEventId(String(campaign.eventId))
+                        setOperationCampaign(campaign)
+                        setIssueCampaignPickerOpen(false)
+                      }}
+                    >
+                      <span>
+                        <strong>{campaignLabel(campaign)}</strong>
+                        <small>
+                          {campaign.totalStock?.toLocaleString() ?? '-'}장 · {campaign.status ?? '상태 확인 필요'}
+                          {campaign.status === 'SCHEDULED' && ' · 오픈 전 선택 불가'}
+                        </small>
+                      </span>
+                      <span className="catalog-check" aria-hidden="true">{String(campaign.eventId) === String(eventId) ? '✓' : '○'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="catalog-empty">선택할 발급 회차가 없습니다. 먼저 캠페인을 생성하세요.</p>
+              )}
+              <button type="button" className="coupon-picker-cancel" onClick={() => setIssueCampaignPickerOpen(false)}>닫기</button>
+            </section>
+          </div>
+        )}
+
+        {campaignPickerOpen && (
+          <div
+            className="coupon-picker-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setCampaignPickerOpen(false)
+            }}
+          >
+            <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="campaign-picker-title">
+              <div className="coupon-picker-header">
+                <div>
+                  <span className="eyebrow">CAMPAIGN SELECT</span>
+                  <h2 id="campaign-picker-title">초기화할 캠페인 선택</h2>
+                  <p>최근 생성한 발급 회차를 선택한 뒤 Redis 재초기화를 실행하세요.</p>
+                </div>
+                <button type="button" className="coupon-picker-close" onClick={() => setCampaignPickerOpen(false)} aria-label="캠페인 선택 창 닫기">×</button>
+              </div>
+              {campaignCandidates.length > 0 ? (
+                <div className="coupon-catalog-list coupon-picker-list">
+                  {campaignCandidates.map((campaign) => (
+                    <button
+                      key={campaign.eventId}
+                      type="button"
+                      className={`coupon-catalog-item ${String(campaign.eventId) === String(initializationEventId) ? 'selected' : ''}`}
+                      onClick={() => {
+                        setInitializationEventId(String(campaign.eventId))
+                        setCampaignPickerOpen(false)
+                      }}
+                    >
+                      <span>
+                        <strong>{campaignLabel(campaign)}</strong>
+                        <small>{campaign.totalStock?.toLocaleString() ?? '-'}장 · {campaign.status ?? '상태 확인 필요'}</small>
+                      </span>
+                      <span className="catalog-check" aria-hidden="true">{String(campaign.eventId) === String(initializationEventId) ? '✓' : '○'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="catalog-empty">선택할 캠페인이 없습니다. 먼저 발급 회차를 생성하세요.</p>
+              )}
+              <button type="button" className="coupon-picker-cancel" onClick={() => setCampaignPickerOpen(false)}>닫기</button>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   )

@@ -61,9 +61,10 @@ export function issueCoupon(eventId, userId, idempotencyKey, signal) {
   })
 }
 
-export function getIssueStatus(eventId, requestId) {
+export function getIssueStatus(eventId, requestId, signal) {
   return request(`/api/v1/events/${eventId}/issues/${requestId}`, {
     method: 'GET',
+    signal,
     headers: { Accept: 'application/json' },
   })
 }
@@ -95,6 +96,18 @@ export function getCoupons(keyword = '', signal) {
     ? `/api/v1/coupons?${new URLSearchParams({ keyword: query })}`
     : '/api/v1/coupons'
 
+  return request(path, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getRecentCouponEvents(status, signal) {
+  const path = status
+    ? `/api/v1/events/recent?${new URLSearchParams({ status })}`
+    : '/api/v1/events/recent'
   return request(path, {
     method: 'GET',
     signal,
