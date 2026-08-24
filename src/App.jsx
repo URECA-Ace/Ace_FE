@@ -3,6 +3,7 @@ import {
   ApiError,
   createCoupon,
   createCouponEvent,
+  getCoupons,
   getIssueStatus,
   getIssuanceStats,
   initializeCampaign,
@@ -119,6 +120,13 @@ function currentTimestamp() {
   return Date.now()
 }
 
+function normalizeCoupons(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.content)) return data.content
+  if (Array.isArray(data?.items)) return data.items
+  return []
+}
+
 function statusMeta(status) {
   return STATUS_META[status] ?? { label: status || '대기', tone: 'neutral' }
 }
@@ -172,6 +180,10 @@ function App() {
   const [couponValue, setCouponValue] = useState('0')
   const [validHours, setValidHours] = useState('24')
   const [creatingCoupon, setCreatingCoupon] = useState(false)
+  const [coupons, setCoupons] = useState([])
+  const [couponSearch, setCouponSearch] = useState('')
+  const [selectedCouponId, setSelectedCouponId] = useState('')
+  const [loadingCoupons, setLoadingCoupons] = useState(true)
   const [createdCoupon, setCreatedCoupon] = useState(null)
   const [totalStock, setTotalStock] = useState('10000')
   const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
@@ -186,8 +198,38 @@ function App() {
   const loadAbortRef = useRef(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
+  const selectedCoupon = coupons.find(
+    (coupon) => String(coupon.couponId) === String(selectedCouponId),
+  ) ?? createdCoupon
+  const filteredCoupons = useMemo(() => {
+    const keyword = couponSearch.trim().toLowerCase()
+    if (!keyword) return coupons
+    return coupons.filter((coupon) =>
+      String(coupon.couponName ?? '').toLowerCase().includes(keyword),
+    )
+  }, [couponSearch, coupons])
 
   useEffect(() => () => loadAbortRef.current?.abort(), [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getCoupons(controller.signal)
+      .then((data) => {
+        const nextCoupons = normalizeCoupons(data)
+        setCoupons(nextCoupons)
+        setSelectedCouponId((current) => current || String(nextCoupons[0]?.couponId ?? ''))
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setNotice({
+          tone: 'danger',
+          message: '현재 만들어진 쿠폰 목록을 불러오지 못했습니다.',
+        })
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingCoupons(false)
+      })
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     try {
@@ -566,6 +608,11 @@ function App() {
         validHours: parsedValidHours,
       })
       setCreatedCoupon(data)
+      setCoupons((current) => [
+        data,
+        ...current.filter((coupon) => String(coupon.couponId) !== String(data.couponId)),
+      ])
+      setSelectedCouponId(String(data.couponId))
       setCreatedEvent(null)
       setOperationCampaign(null)
       setEventId('')
@@ -584,7 +631,7 @@ function App() {
 
   async function createEvent(event) {
     event.preventDefault()
-    const parsedCouponId = Number(createdCoupon?.couponId)
+    const parsedCouponId = Number(selectedCoupon?.couponId)
     const parsedTotalStock = Number(totalStock)
     const openDate = new Date(openAt)
     const closeDate = new Date(closeAt)
@@ -849,6 +896,43 @@ function App() {
                   <small>{createdCoupon.type} · 혜택 {createdCoupon.value} · 발급 후 {createdCoupon.validHours}시간</small>
                 </div>
               )}
+              <div className="coupon-catalog" aria-labelledby="coupon-catalog-title">
+                <div className="catalog-heading">
+                  <div>
+                    <strong id="coupon-catalog-title">생성된 쿠폰 목록</strong>
+                    <small>{coupons.length.toLocaleString()}개 쿠폰</small>
+                  </div>
+                  <input
+                    type="search"
+                    value={couponSearch}
+                    onChange={(event) => setCouponSearch(event.target.value)}
+                    placeholder="쿠폰 이름 검색"
+                    aria-label="쿠폰 이름 검색"
+                  />
+                </div>
+                {loadingCoupons ? (
+                  <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
+                ) : filteredCoupons.length > 0 ? (
+                  <div className="coupon-catalog-list">
+                    {filteredCoupons.map((coupon) => (
+                      <button
+                        key={coupon.couponId}
+                        type="button"
+                        className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
+                        onClick={() => setSelectedCouponId(String(coupon.couponId))}
+                      >
+                        <span>
+                          <strong>{coupon.couponName}</strong>
+                          <small>#{coupon.couponId} · {coupon.type}</small>
+                        </span>
+                        <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
+                )}
+              </div>
             </section>
 
             <section className="panel event-create-panel" aria-labelledby="event-create-title">
@@ -863,16 +947,16 @@ function App() {
                 <label>
                   대상 쿠폰
                   <input
-                    value={createdCoupon ? `#${createdCoupon.couponId} · ${createdCoupon.couponName}` : ''}
+                    value={selectedCoupon ? `#${selectedCoupon.couponId} · ${selectedCoupon.couponName}` : ''}
                     readOnly
                     aria-readonly="true"
-                    placeholder="먼저 쿠폰 상품을 생성하세요"
+                    placeholder="위 목록에서 쿠폰을 선택하세요"
                   />
                 </label>
                 <label>
                   회차
                   <input
-                    value={createdEvent ? `${createdEvent.round}회차` : '서버에서 자동 배정'}
+                    value={createdEvent ? `${createdEvent.round ?? '-'}회차` : '서버에서 자동 배정'}
                     readOnly
                     aria-readonly="true"
                     title="쿠폰별 마지막 회차 다음 번호가 서버 트랜잭션에서 배정됩니다."
@@ -896,7 +980,7 @@ function App() {
                     </label>
                   </div>
                 </fieldset>
-                <button className="primary-button" type="submit" disabled={creatingEvent || !createdCoupon}>
+                <button className="primary-button" type="submit" disabled={creatingEvent || !selectedCoupon}>
                   {creatingEvent ? '이벤트 생성 중…' : '쿠폰 이벤트 생성'}
                   <span>→</span>
                 </button>

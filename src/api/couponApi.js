@@ -89,6 +89,15 @@ export function createCoupon(payload, signal) {
   })
 }
 
+export function getCoupons(signal) {
+  return request('/api/v1/coupons', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function createCouponEvent(couponId, payload, signal) {
   return request(`/api/v1/coupons/${couponId}/events`, {
     method: 'POST',
