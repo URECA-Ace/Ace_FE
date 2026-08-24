@@ -1501,11 +1501,8 @@ h1 {
   font-weight: 700;
 }
 
-.traffic-form label:nth-child(3) {
-  grid-column: 1 / -1;
-}
-
-.traffic-form input {
+.traffic-form input,
+.traffic-form select {
   width: 100%;
   height: 38px;
   padding: 0 11px;
@@ -1516,7 +1513,8 @@ h1 {
   font-size: 11px;
 }
 
-.traffic-form input:disabled {
+.traffic-form input:disabled,
+.traffic-form select:disabled {
   opacity: 0.55;
 }
 
@@ -1719,6 +1717,7 @@ h2 {
 }
 
 .coupon-preview {
+  width: 100%;
   position: relative;
   min-height: 178px;
   padding: 23px 24px;
@@ -1732,6 +1731,28 @@ h2 {
   gap: 18px;
   overflow: hidden;
   box-shadow: 0 16px 30px rgba(196, 0, 111, 0.18);
+}
+
+.coupon-preview-button {
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.coupon-preview-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 36px rgba(196, 0, 111, 0.26);
+}
+
+.coupon-preview-button:focus-visible {
+  outline: 3px solid rgba(230, 0, 126, 0.24);
+  outline-offset: 3px;
+}
+
+.coupon-preview-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .coupon-preview::before,
@@ -2477,7 +2498,6 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .traffic-form label:nth-child(3),
   .traffic-start-button,
   .traffic-stop-button {
     grid-column: auto;

@@ -46,6 +46,11 @@ function formatObservedAt(value) {
   }).format(date)
 }
 
+function campaignLabel(campaign) {
+  if (!campaign) return '발급 회차를 선택하세요'
+  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차(${campaign.eventId})`
+}
+
 function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const defaultEventId = recentCampaigns[0]?.eventId ?? selectedEventId
   const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
@@ -56,6 +61,10 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const [error, setError] = useState(null)
   const pollingControllerRef = useRef(null)
   const pollingTimeoutRef = useRef(null)
+  const monitoringSessionRef = useRef(0)
+  const effectiveEventId = recentCampaigns.some(
+    (campaign) => String(campaign.eventId) === String(eventId),
+  ) ? eventId : String(defaultEventId ?? '')
 
   const readStats = useCallback(async (targetEventId, signal) => {
     setLoading(true)
@@ -84,12 +93,14 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     if (!polling || !monitoredEventId) return undefined
 
     const controller = new AbortController()
+    const session = monitoringSessionRef.current + 1
+    monitoringSessionRef.current = session
     let disposed = false
     pollingControllerRef.current = controller
 
     async function poll() {
       await readStats(monitoredEventId, controller.signal)
-      if (!disposed && !controller.signal.aborted) {
+      if (!disposed && !controller.signal.aborted && monitoringSessionRef.current === session) {
         pollingTimeoutRef.current = window.setTimeout(poll, POLLING_INTERVAL_MS)
       }
     }
@@ -109,11 +120,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     }
   }, [monitoredEventId, polling, readStats])
 
-  useEffect(() => {
-    const nextEventId = recentCampaigns[0]?.eventId ?? selectedEventId
-    if (nextEventId && !polling) setEventId(String(nextEventId))
-  }, [recentCampaigns, selectedEventId, polling])
-
   useEffect(() => () => {
     pollingControllerRef.current?.abort()
     if (pollingTimeoutRef.current !== null) {
@@ -122,6 +128,9 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   }, [])
 
   function stopMonitoring() {
+    monitoringSessionRef.current += 1
+    setPolling(false)
+    setMonitoredEventId(null)
     pollingControllerRef.current?.abort()
     pollingControllerRef.current = null
     if (pollingTimeoutRef.current !== null) {
@@ -129,12 +138,11 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
       pollingTimeoutRef.current = null
     }
     setLoading(false)
-    setPolling(false)
   }
 
   function startMonitoring(event) {
     event.preventDefault()
-    const parsedEventId = Number(eventId)
+    const parsedEventId = Number(effectiveEventId)
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
       setError({ code: 'INVALID_EVENT_ID', message: '캠페인 ID는 1 이상의 정수여야 합니다.' })
       return
@@ -147,7 +155,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   }
 
   const selectedCampaign = recentCampaigns.find(
-    (campaign) => String(campaign.eventId) === String(eventId),
+    (campaign) => String(campaign.eventId) === String(effectiveEventId),
   )
   const statusMeta = CAMPAIGN_STATUS[stats?.status] ?? {
     label: '조회 대기',
@@ -171,13 +179,13 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           <div>
             <select
               id="monitor-event-id"
-              value={eventId}
+              value={effectiveEventId}
               onChange={(event) => setEventId(event.target.value)}
               disabled={polling}
             >
               {recentCampaigns.length > 0 ? recentCampaigns.map((campaign) => (
                 <option key={campaign.eventId} value={campaign.eventId}>
-                  {campaign.round ?? 1}회차 · 캠페인 #{campaign.eventId}
+                  {campaignLabel(campaign)}
                 </option>
               )) : (
                 <option value="">먼저 발급 회차를 생성하세요</option>

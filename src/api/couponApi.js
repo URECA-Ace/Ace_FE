@@ -103,6 +103,15 @@ export function getCoupons(keyword = '', signal) {
   })
 }
 
+export function getRecentCouponEvents(signal) {
+  return request('/api/v1/events/recent', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function createCouponEvent(couponId, payload, signal) {
   return request(`/api/v1/coupons/${couponId}/events`, {
     method: 'POST',
