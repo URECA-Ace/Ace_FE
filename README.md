@@ -22,7 +22,7 @@ VITE_API_BASE_URL=http://localhost:8080
 - `POST /api/v1/events/{eventId}/issues`: 사용자 쿠폰 발급 요청
 - `GET /api/v1/events/{eventId}/issues/{requestId}`: 비동기 발급 상태 조회
 - `GET /api/v1/events/{eventId}/issuance-stats`: Redis 기반 실시간 캠페인 발급 현황 조회
-- `GET /api/v1/events/recent`: 쿠폰 이름이 포함된 최근 발급 회차 5건 조회
+- `GET /api/v1/events/recent`: 쿠폰 이름이 포함된 최근 발급 회차 5건 조회 (`status=OPEN` 필터 지원)
 
 발급 상태가 `ACCEPTED` 또는 `PROCESSING`이면 3초 간격으로 자동 조회합니다. 발급 이력과 상태 타임라인은 이 화면에서 받은 실제 API 응답을 브라우저 로컬 스토리지에 보관한 시연용 기록입니다.
 
@@ -30,7 +30,7 @@ VITE_API_BASE_URL=http://localhost:8080
 
 관리자 화면에서 캠페인 ID를 입력하고 실시간 관제를 시작하면 발급 현황 API를 1초 간격으로 조회합니다. 다음 정보를 확인할 수 있습니다.
 
-관제 대상은 최근 발급 회차 5건 중에서 선택합니다. 관제를 중지하면 폴링 요청과 예약된 타이머가 함께 취소되고 발급 회차 선택란이 다시 활성화됩니다.
+관제 대상은 최근 `OPEN` 발급 회차 5건 중에서 선택합니다. 최근 회차는 5초 간격으로 갱신되어 예약 회차가 `OPEN`으로 전환되면 목록에 표시됩니다. 관제를 중지하면 폴링 요청과 반복 타이머가 함께 취소되고 발급 회차 선택란이 다시 활성화됩니다.
 
 - 캠페인의 현재 `SCHEDULED`, `OPEN`, `SOLD_OUT`, `CLOSED` 상태
 - 전체 재고, Redis 배정 수량, 남은 재고와 배정률

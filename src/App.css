@@ -1755,6 +1755,18 @@ h2 {
   opacity: 0.72;
 }
 
+.coupon-catalog-item:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+  opacity: 0.5;
+}
+
+.coupon-catalog-item:disabled:hover {
+  border-color: var(--line);
+  background: #fff;
+  transform: none;
+}
+
 .coupon-preview::before,
 .coupon-preview::after {
   content: '';
@@ -2145,6 +2157,49 @@ h2 {
 
 .table-wrap {
   overflow-x: auto;
+}
+
+.history-scope-tabs {
+  margin-bottom: 12px;
+  padding: 3px;
+  display: inline-flex;
+  gap: 3px;
+  border-radius: 9px;
+  background: #f3f0f4;
+}
+
+.history-scope-tabs button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #817984;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.history-scope-tabs button.selected {
+  color: #9f005e;
+  background: #fff;
+  box-shadow: 0 3px 9px rgba(44, 29, 47, 0.08);
+}
+
+.history-scope-tabs button span {
+  min-width: 18px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #8e858f;
+  background: #e9e4ea;
+  font: 700 8px/1.2 Manrope, sans-serif;
+  text-align: center;
+}
+
+.history-scope-tabs button.selected span {
+  color: #a30061;
+  background: #fdebf5;
 }
 
 table {

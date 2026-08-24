@@ -103,8 +103,11 @@ export function getCoupons(keyword = '', signal) {
   })
 }
 
-export function getRecentCouponEvents(signal) {
-  return request('/api/v1/events/recent', {
+export function getRecentCouponEvents(status, signal) {
+  const path = status
+    ? `/api/v1/events/recent?${new URLSearchParams({ status })}`
+    : '/api/v1/events/recent'
+  return request(path, {
     method: 'GET',
     signal,
     cache: 'no-store',

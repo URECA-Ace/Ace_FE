@@ -56,12 +56,13 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
   const [monitoredEventId, setMonitoredEventId] = useState(null)
   const [stats, setStats] = useState(null)
-  const [polling, setPolling] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const pollingControllerRef = useRef(null)
-  const pollingTimeoutRef = useRef(null)
-  const monitoringSessionRef = useRef(0)
+  const pollingIntervalRef = useRef(null)
+  const monitoringActiveRef = useRef(false)
+  const requestInFlightRef = useRef(false)
+  const polling = monitoredEventId !== null
   const effectiveEventId = recentCampaigns.some(
     (campaign) => String(campaign.eventId) === String(eventId),
   ) ? eventId : String(defaultEventId ?? '')
@@ -70,6 +71,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     setLoading(true)
     try {
       const data = await getIssuanceStats(targetEventId, signal)
+      if (signal?.aborted || !monitoringActiveRef.current) return
       setStats(data)
       setError(null)
 
@@ -83,59 +85,66 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
         message: ERROR_MESSAGES[apiError.code] ?? apiError.message,
         incidentId: apiError.incidentId,
       })
-      if (apiError.code === 'EVENT_NOT_FOUND') setPolling(false)
+      if (apiError.code === 'EVENT_NOT_FOUND') setMonitoredEventId(null)
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      if (!signal?.aborted && monitoringActiveRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (!polling || !monitoredEventId) return undefined
+    if (!monitoredEventId) return undefined
 
     const controller = new AbortController()
-    const session = monitoringSessionRef.current + 1
-    monitoringSessionRef.current = session
-    let disposed = false
+    monitoringActiveRef.current = true
     pollingControllerRef.current = controller
 
     async function poll() {
-      await readStats(monitoredEventId, controller.signal)
-      if (!disposed && !controller.signal.aborted && monitoringSessionRef.current === session) {
-        pollingTimeoutRef.current = window.setTimeout(poll, POLLING_INTERVAL_MS)
+      if (!monitoringActiveRef.current || controller.signal.aborted || requestInFlightRef.current) return
+      requestInFlightRef.current = true
+      try {
+        await readStats(monitoredEventId, controller.signal)
+      } finally {
+        requestInFlightRef.current = false
       }
     }
 
     poll()
+    pollingIntervalRef.current = window.setInterval(poll, POLLING_INTERVAL_MS)
 
     return () => {
-      disposed = true
+      monitoringActiveRef.current = false
+      requestInFlightRef.current = false
       controller.abort()
       if (pollingControllerRef.current === controller) {
         pollingControllerRef.current = null
       }
-      if (pollingTimeoutRef.current !== null) {
-        window.clearTimeout(pollingTimeoutRef.current)
-        pollingTimeoutRef.current = null
+      if (pollingIntervalRef.current !== null) {
+        window.clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
       }
     }
-  }, [monitoredEventId, polling, readStats])
+  }, [monitoredEventId, readStats])
 
   useEffect(() => () => {
+    monitoringActiveRef.current = false
+    requestInFlightRef.current = false
     pollingControllerRef.current?.abort()
-    if (pollingTimeoutRef.current !== null) {
-      window.clearTimeout(pollingTimeoutRef.current)
+    if (pollingIntervalRef.current !== null) {
+      window.clearInterval(pollingIntervalRef.current)
     }
   }, [])
 
   function stopMonitoring() {
-    monitoringSessionRef.current += 1
-    setPolling(false)
+    monitoringActiveRef.current = false
+    requestInFlightRef.current = false
     setMonitoredEventId(null)
+    setStats(null)
+    setError(null)
     pollingControllerRef.current?.abort()
     pollingControllerRef.current = null
-    if (pollingTimeoutRef.current !== null) {
-      window.clearTimeout(pollingTimeoutRef.current)
-      pollingTimeoutRef.current = null
+    if (pollingIntervalRef.current !== null) {
+      window.clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
     }
     setLoading(false)
   }
@@ -151,19 +160,19 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     setStats(null)
     setError(null)
     setMonitoredEventId(parsedEventId)
-    setPolling(true)
   }
 
   const selectedCampaign = recentCampaigns.find(
     (campaign) => String(campaign.eventId) === String(effectiveEventId),
   )
-  const statusMeta = CAMPAIGN_STATUS[stats?.status] ?? {
+  const visibleStats = polling ? stats : null
+  const statusMeta = CAMPAIGN_STATUS[visibleStats?.status] ?? {
     label: '조회 대기',
     tone: 'idle',
     description: '최근 발급 회차를 선택하고 실시간 관제를 시작하세요.',
   }
-  const allocationRate = stats?.totalStock > 0
-    ? Math.min((stats.allocatedQuantity / stats.totalStock) * 100, 100)
+  const allocationRate = visibleStats?.totalStock > 0
+    ? Math.min((visibleStats.allocatedQuantity / visibleStats.totalStock) * 100, 100)
     : 0
 
   return (
@@ -192,7 +201,15 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
               )}
             </select>
             {polling ? (
-              <button type="button" className="monitor-stop" onClick={stopMonitoring}>
+              <button
+                type="button"
+                className="monitor-stop"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  stopMonitoring()
+                }}
+              >
                 관제 중지
               </button>
             ) : (
@@ -209,7 +226,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           <div className="campaign-state-heading">
             <span className="state-live-dot" />
             <div>
-              <small>CAMPAIGN #{monitoredEventId ?? '-'} · {selectedCampaign?.round ?? '-'}회차</small>
+              <small>{polling ? campaignLabel(selectedCampaign) : '관제 중지됨'}</small>
               <strong>{statusMeta.label}</strong>
             </div>
             {polling && <span className="polling-chip">LIVE · 1s</span>}
@@ -218,11 +235,11 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           <dl>
             <div>
               <dt>서버 관측 시각</dt>
-              <dd>{formatObservedAt(stats?.observedAt)}</dd>
+              <dd>{formatObservedAt(visibleStats?.observedAt)}</dd>
             </div>
             <div>
               <dt>API 상태</dt>
-              <dd>{loading ? '조회 중…' : error ? '조회 오류' : stats ? '정상' : '대기'}</dd>
+              <dd>{loading ? '조회 중…' : error ? '조회 오류' : visibleStats ? '정상' : '대기'}</dd>
             </div>
           </dl>
         </div>
@@ -231,15 +248,15 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           <div className="inventory-heading">
             <div>
               <span>전체 재고</span>
-              <strong>{stats?.totalStock?.toLocaleString() ?? '-'}</strong>
+              <strong>{visibleStats?.totalStock?.toLocaleString() ?? '-'}</strong>
             </div>
             <div>
               <span>배정 수량</span>
-              <strong>{stats?.allocatedQuantity?.toLocaleString() ?? '-'}</strong>
+              <strong>{visibleStats?.allocatedQuantity?.toLocaleString() ?? '-'}</strong>
             </div>
             <div className="remaining">
               <span>남은 재고</span>
-              <strong>{stats?.remainingStock?.toLocaleString() ?? '-'}</strong>
+              <strong>{visibleStats?.remainingStock?.toLocaleString() ?? '-'}</strong>
             </div>
           </div>
           <div className="inventory-progress-heading">
