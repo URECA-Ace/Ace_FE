@@ -364,6 +364,29 @@ h1 {
   background: #675c69;
 }
 
+.notice-toast {
+  position: fixed;
+  z-index: 30;
+  top: 24px;
+  right: 24px;
+  width: min(440px, calc(100vw - 48px));
+  margin: 0;
+  box-shadow: 0 16px 38px rgba(30, 18, 34, 0.16);
+  animation: notice-toast-in 220ms ease-out both;
+}
+
+@keyframes notice-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .workspace-grid,
 .history-grid {
   display: grid;
@@ -993,6 +1016,13 @@ h1 {
   border: 1px solid #ddd7e1;
   border-radius: 9px;
   background: #fcfbfd;
+}
+
+.initialization-form .campaign-picker-trigger {
+  min-height: 40px;
+  margin-top: 0;
+  padding-block: 0;
+  font-size: 11px;
 }
 
 .initialization-result {
@@ -1640,8 +1670,18 @@ h1 {
 
 .panel-heading > div {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
+}
+
+.panel-description {
+  flex-basis: 100%;
+  margin: -2px 0 0 38px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .section-number {
