@@ -196,6 +196,7 @@ function App() {
   const [creatingCoupon, setCreatingCoupon] = useState(false)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
+  const [couponPickerOpen, setCouponPickerOpen] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
   const [selectedCouponSnapshot, setSelectedCouponSnapshot] = useState(() => {
     const selectedId = String(initialWorkspace.selectedCouponId ?? '')
@@ -230,6 +231,17 @@ function App() {
     : null) ?? createdCoupon
 
   useEffect(() => () => loadAbortRef.current?.abort(), [])
+
+  useEffect(() => {
+    if (!couponPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setCouponPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [couponPickerOpen])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -968,44 +980,20 @@ function App() {
                 <div className="catalog-heading">
                   <div>
                     <strong id="coupon-catalog-title">발급할 쿠폰 선택</strong>
-                    <small>{couponSearch.trim()
-                      ? `검색 결과 ${coupons.length.toLocaleString()}개`
-                      : `최근 쿠폰 ${coupons.length.toLocaleString()}개`}</small>
+                    <small>선택된 쿠폰의 회차와 재고를 설정합니다.</small>
                   </div>
-                  <input
-                    type="search"
-                    value={couponSearch}
-                    onChange={(event) => setCouponSearch(event.target.value)}
-                    placeholder="쿠폰 이름 검색"
-                    aria-label="쿠폰 이름 검색"
-                  />
                 </div>
-                {loadingCoupons ? (
-                  <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
-                ) : coupons.length > 0 ? (
-                  <div className="coupon-catalog-list">
-                    {coupons.map((coupon) => (
-                      <button
-                        key={coupon.couponId}
-                        type="button"
-                        className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedCouponId(String(coupon.couponId))
-                          setSelectedCouponSnapshot(coupon)
-                          setCreatedEvent(null)
-                        }}
-                      >
-                        <span>
-                          <strong>{coupon.couponName}</strong>
-                          <small>#{coupon.couponId} · {coupon.type}</small>
-                        </span>
-                        <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
-                )}
+                <button
+                  type="button"
+                  className="coupon-picker-trigger"
+                  onClick={() => setCouponPickerOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={couponPickerOpen}
+                >
+                  <span className="coupon-picker-trigger-icon" aria-hidden="true">⌕</span>
+                  <span>{selectedCoupon ? selectedCoupon.couponName : '쿠폰을 검색해서 선택하세요'}</span>
+                  <span className="coupon-picker-trigger-arrow" aria-hidden="true">›</span>
+                </button>
               </div>
               <form className="event-create-form" onSubmit={createEvent}>
                 <label>
@@ -1540,6 +1528,70 @@ function App() {
             )}
           </article>
         </section>
+
+        {couponPickerOpen && (
+          <div
+            className="coupon-picker-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setCouponPickerOpen(false)
+            }}
+          >
+            <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="coupon-picker-title">
+              <div className="coupon-picker-header">
+                <div>
+                  <span className="eyebrow">COUPON SELECT</span>
+                  <h2 id="coupon-picker-title">발급할 쿠폰 선택</h2>
+                  <p>쿠폰 제목을 검색하거나 최근 생성한 쿠폰을 선택하세요.</p>
+                </div>
+                <button type="button" className="coupon-picker-close" onClick={() => setCouponPickerOpen(false)} aria-label="쿠폰 선택 창 닫기">×</button>
+              </div>
+              <label className="coupon-picker-search">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  type="search"
+                  value={couponSearch}
+                  onChange={(event) => setCouponSearch(event.target.value)}
+                  placeholder="쿠폰 제목 검색"
+                  aria-label="쿠폰 제목 검색"
+                  autoFocus
+                />
+              </label>
+              <div className="coupon-picker-list-heading">
+                <strong>{couponSearch.trim() ? '검색 결과' : '최근 생성한 쿠폰'}</strong>
+                <small>{coupons.length.toLocaleString()}개</small>
+              </div>
+              {loadingCoupons ? (
+                <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
+              ) : coupons.length > 0 ? (
+                <div className="coupon-catalog-list coupon-picker-list">
+                  {coupons.map((coupon) => (
+                    <button
+                      key={coupon.couponId}
+                      type="button"
+                      className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedCouponId(String(coupon.couponId))
+                        setSelectedCouponSnapshot(coupon)
+                        setCreatedEvent(null)
+                        setCouponPickerOpen(false)
+                      }}
+                    >
+                      <span>
+                        <strong>{coupon.couponName}</strong>
+                        <small>#{coupon.couponId} · {coupon.type}</small>
+                      </span>
+                      <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="catalog-empty">검색 결과에 맞는 쿠폰이 없습니다.</p>
+              )}
+              <button type="button" className="coupon-picker-cancel" onClick={() => setCouponPickerOpen(false)}>닫기</button>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   )
