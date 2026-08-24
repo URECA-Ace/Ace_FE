@@ -114,16 +114,6 @@ function loadWorkspace() {
   }
 }
 
-function mergeCoupons(serverCoupons, savedCoupons) {
-  const merged = new Map()
-  ;[...serverCoupons, ...savedCoupons].forEach((coupon) => {
-    if (coupon?.couponId !== null && coupon?.couponId !== undefined) {
-      merged.set(String(coupon.couponId), coupon)
-    }
-  })
-  return [...merged.values()]
-}
-
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -207,6 +197,14 @@ function App() {
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
   const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
+  const [selectedCouponSnapshot, setSelectedCouponSnapshot] = useState(() => {
+    const selectedId = String(initialWorkspace.selectedCouponId ?? '')
+    return initialWorkspace.selectedCouponSnapshot
+      ?? normalizeCoupons(initialWorkspace.coupons).find(
+        (coupon) => String(coupon.couponId) === selectedId,
+      )
+      ?? null
+  })
   const [loadingCoupons, setLoadingCoupons] = useState(true)
   const [createdCoupon, setCreatedCoupon] = useState(initialWorkspace.createdCoupon ?? null)
   const [totalStock, setTotalStock] = useState('10000')
@@ -227,44 +225,56 @@ function App() {
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedCoupon = coupons.find(
     (coupon) => String(coupon.couponId) === String(selectedCouponId),
-  ) ?? createdCoupon
-  const filteredCoupons = useMemo(() => {
-    const keyword = couponSearch.trim().toLowerCase()
-    if (!keyword) return coupons
-    return coupons.filter((coupon) =>
-      String(coupon.couponName ?? '').toLowerCase().includes(keyword),
-    )
-  }, [couponSearch, coupons])
+  ) ?? (String(selectedCouponSnapshot?.couponId) === String(selectedCouponId)
+    ? selectedCouponSnapshot
+    : null) ?? createdCoupon
 
   useEffect(() => () => loadAbortRef.current?.abort(), [])
 
   useEffect(() => {
     const controller = new AbortController()
-    getCoupons(controller.signal)
-      .then((data) => {
-        const serverCoupons = normalizeCoupons(data)
-        setCoupons((currentCoupons) => mergeCoupons(serverCoupons, currentCoupons))
-        setSelectedCouponId((current) => current || String(serverCoupons[0]?.couponId ?? ''))
-      })
-      .catch(() => {
-        if (!controller.signal.aborted && !hasSavedCouponsRef.current) {
-          setNotice({
-            tone: 'danger',
-            message: '쿠폰 목록 API를 사용할 수 없습니다. 새 쿠폰을 생성하면 이 브라우저에 저장됩니다.',
+    const keyword = couponSearch.trim()
+
+    const timer = window.setTimeout(() => {
+      setLoadingCoupons(true)
+      getCoupons(keyword, controller.signal)
+        .then((data) => {
+          const serverCoupons = normalizeCoupons(data)
+          setCoupons(serverCoupons)
+          setSelectedCouponId((current) => {
+            const nextId = current || String(serverCoupons[0]?.couponId ?? '')
+            const selectedFromServer = serverCoupons.find(
+              (coupon) => String(coupon.couponId) === String(nextId),
+            )
+            if (selectedFromServer) setSelectedCouponSnapshot(selectedFromServer)
+            return nextId
           })
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingCoupons(false)
-      })
-    return () => controller.abort()
-  }, [])
+        })
+        .catch(() => {
+          if (!controller.signal.aborted && !hasSavedCouponsRef.current) {
+            setNotice({
+              tone: 'danger',
+              message: '쿠폰 목록을 불러오지 못했습니다. 백엔드 서버 실행 상태를 확인하세요.',
+            })
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoadingCoupons(false)
+        })
+    }, keyword ? 300 : 0)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [couponSearch])
 
   useEffect(() => {
     try {
       localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({
         coupons,
         selectedCouponId,
+        selectedCouponSnapshot,
         createdCoupon,
         createdEvent,
         operationCampaign,
@@ -273,7 +283,7 @@ function App() {
     } catch {
       // 브라우저 저장소가 제한돼도 서버 API 기능은 유지한다.
     }
-  }, [coupons, selectedCouponId, createdCoupon, createdEvent, operationCampaign, activeTab])
+  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, createdEvent, operationCampaign, activeTab])
 
   useEffect(() => {
     try {
@@ -655,8 +665,10 @@ function App() {
       setCoupons((current) => [
         data,
         ...current.filter((coupon) => String(coupon.couponId) !== String(data.couponId)),
-      ])
+      ].slice(0, 6))
       setSelectedCouponId(String(data.couponId))
+      setSelectedCouponSnapshot(data)
+      setCouponSearch('')
       setCreatedEvent(null)
       setOperationCampaign(null)
       setEventId('')
@@ -956,7 +968,9 @@ function App() {
                 <div className="catalog-heading">
                   <div>
                     <strong id="coupon-catalog-title">발급할 쿠폰 선택</strong>
-                    <small>{coupons.length.toLocaleString()}개 쿠폰</small>
+                    <small>{couponSearch.trim()
+                      ? `검색 결과 ${coupons.length.toLocaleString()}개`
+                      : `최근 쿠폰 ${coupons.length.toLocaleString()}개`}</small>
                   </div>
                   <input
                     type="search"
@@ -968,15 +982,16 @@ function App() {
                 </div>
                 {loadingCoupons ? (
                   <p className="catalog-empty">쿠폰 목록을 불러오는 중입니다.</p>
-                ) : filteredCoupons.length > 0 ? (
+                ) : coupons.length > 0 ? (
                   <div className="coupon-catalog-list">
-                    {filteredCoupons.map((coupon) => (
+                    {coupons.map((coupon) => (
                       <button
                         key={coupon.couponId}
                         type="button"
                         className={`coupon-catalog-item ${String(coupon.couponId) === String(selectedCouponId) ? 'selected' : ''}`}
                         onClick={() => {
                           setSelectedCouponId(String(coupon.couponId))
+                          setSelectedCouponSnapshot(coupon)
                           setCreatedEvent(null)
                         }}
                       >

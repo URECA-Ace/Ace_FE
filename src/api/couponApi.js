@@ -89,8 +89,13 @@ export function createCoupon(payload, signal) {
   })
 }
 
-export function getCoupons(signal) {
-  return request('/api/v1/coupons', {
+export function getCoupons(keyword = '', signal) {
+  const query = keyword.trim()
+  const path = query
+    ? `/api/v1/coupons?${new URLSearchParams({ keyword: query })}`
+    : '/api/v1/coupons'
+
+  return request(path, {
     method: 'GET',
     signal,
     cache: 'no-store',
