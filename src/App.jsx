@@ -114,6 +114,17 @@ function loadWorkspace() {
   }
 }
 
+function getSavedCouponRounds(workspace) {
+  if (workspace.couponRounds && typeof workspace.couponRounds === 'object') {
+    return workspace.couponRounds
+  }
+
+  const event = workspace.createdEvent
+  const couponId = event?.couponId ?? workspace.selectedCouponId
+  if (!couponId || !Number.isSafeInteger(Number(event?.round))) return {}
+  return { [couponId]: Number(event.round) + 1 }
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -208,6 +219,7 @@ function App() {
   })
   const [loadingCoupons, setLoadingCoupons] = useState(true)
   const [createdCoupon, setCreatedCoupon] = useState(initialWorkspace.createdCoupon ?? null)
+  const [couponRounds, setCouponRounds] = useState(() => getSavedCouponRounds(initialWorkspace))
   const [totalStock, setTotalStock] = useState('10000')
   const [scheduleMode, setScheduleMode] = useState('immediate')
   const [openAt, setOpenAt] = useState(DEFAULT_EVENT_FORM.openAt)
@@ -230,6 +242,7 @@ function App() {
   ) ?? (String(selectedCouponSnapshot?.couponId) === String(selectedCouponId)
     ? selectedCouponSnapshot
     : null) ?? createdCoupon
+  const nextCouponRound = couponRounds[selectedCouponId] ?? 1
   const campaignCandidates = [createdEvent, operationCampaign].filter(
     (campaign, index, campaigns) => campaign?.eventId && campaigns.findIndex(
       (item) => String(item?.eventId) === String(campaign.eventId),
@@ -312,6 +325,7 @@ function App() {
         selectedCouponId,
         selectedCouponSnapshot,
         createdCoupon,
+        couponRounds,
         createdEvent,
         operationCampaign,
         activeTab,
@@ -319,7 +333,7 @@ function App() {
     } catch {
       // 브라우저 저장소가 제한돼도 서버 API 기능은 유지한다.
     }
-  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, createdEvent, operationCampaign, activeTab])
+  }, [coupons, selectedCouponId, selectedCouponSnapshot, createdCoupon, couponRounds, createdEvent, operationCampaign, activeTab])
 
   useEffect(() => {
     try {
@@ -759,6 +773,12 @@ function App() {
 
       const newEventId = data.eventId
       setCreatedEvent(data)
+      if (Number.isSafeInteger(Number(data.round))) {
+        setCouponRounds((current) => ({
+          ...current,
+          [parsedCouponId]: Number(data.round) + 1,
+        }))
+      }
       setOperationCampaign(data)
       setLoadResult(INITIAL_LOAD_RESULT)
       if (newEventId) {
@@ -1035,7 +1055,7 @@ function App() {
                 <label>
                   회차
                   <input
-                    value={`${createdEvent?.round ?? 1}회차`}
+                    value={`${nextCouponRound}회차`}
                     readOnly
                     aria-readonly="true"
                     title="쿠폰별 마지막 회차 다음 번호가 서버 트랜잭션에서 배정됩니다."
