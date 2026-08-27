@@ -557,6 +557,7 @@ function App() {
 
         {activeTab === 'operations' && (
           <OperationsTab
+            view="monitor"
             eventId={eventId}
             setEventId={setEventId}
             recentCampaigns={recentCampaigns}
@@ -597,10 +598,36 @@ function App() {
               />
             </section>
 
-            <section className="test-section" aria-labelledby="coupon-state-test-section-title">
+            <section className="test-section" aria-labelledby="issue-operation-section-title">
               <div className="test-section-heading">
                 <div>
                   <span>02</span>
+                  <div>
+                    <p>ISSUE OPERATIONS</p>
+                    <h2 id="issue-operation-section-title">쿠폰 발급 운영</h2>
+                  </div>
+                </div>
+                <small>쿠폰 발급 · 발급 이력 · 쿠폰 상태 이력</small>
+              </div>
+              <OperationsTab
+                view="issue-operations"
+                eventId={eventId}
+                setEventId={setEventId}
+                recentCampaigns={recentCampaigns}
+                openCampaigns={openCampaigns}
+                operationCampaign={operationCampaign}
+                setOperationCampaign={setOperationCampaign}
+                setNotice={setNotice}
+                campaignLabel={campaignLabel}
+                formatDate={formatDate}
+                errorLabels={ERROR_LABELS}
+              />
+            </section>
+
+            <section className="test-section" aria-labelledby="coupon-state-test-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>03</span>
                   <div>
                     <p>COUPON STATE VERIFICATION</p>
                     <h2 id="coupon-state-test-section-title">쿠폰 상태 변경 테스트</h2>

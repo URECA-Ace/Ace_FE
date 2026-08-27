@@ -452,6 +452,41 @@ function OperationsTab({
     return userControlPanel
   }
 
+  if (view === 'monitor') {
+    return (
+      <>
+        <section className="summary-grid" aria-label="발급 현황 요약">
+          <article className="summary-card accent-card">
+            <div>
+              <span>최근 확인 잔여 수량</span>
+              <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
+            </div>
+            <span className="summary-unit">장</span>
+          </article>
+          <article className="summary-card">
+            <span>발급 판정 승인</span>
+            <strong>{summary.accepted.toLocaleString()}</strong>
+            <small>Redis 원자적 판정 통과</small>
+          </article>
+          <article className="summary-card">
+            <span>처리 중</span>
+            <strong>{summary.processing.toLocaleString()}</strong>
+            <small>3초 간격 자동 조회</small>
+          </article>
+          <article className="summary-card">
+            <span>실패 · 원복</span>
+            <strong>{summary.failed.toLocaleString()}</strong>
+            <small>확인이 필요한 요청</small>
+          </article>
+        </section>
+        <CampaignMonitor
+          selectedEventId={operationCampaign?.eventId}
+          recentCampaigns={openCampaigns}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <section className="summary-grid" aria-label="발급 현황 요약">
@@ -478,11 +513,6 @@ function OperationsTab({
           <small>확인이 필요한 요청</small>
         </article>
       </section>
-
-      <CampaignMonitor
-        selectedEventId={operationCampaign?.eventId}
-        recentCampaigns={openCampaigns}
-      />
 
       <section className="workspace-grid operations-workspace-grid">
         <article className="panel issue-panel">
