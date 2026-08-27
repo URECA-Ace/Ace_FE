@@ -362,7 +362,6 @@ function OperationsTab({
           <span className="section-number">02</span>
           <h2>사용자 쿠폰 제어</h2>
         </div>
-        {selected && <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>}
       </div>
 
       {records.length > 0 ? (
@@ -543,65 +542,63 @@ function OperationsTab({
             </div>
           </div>
 
-          <button
-            className="coupon-preview coupon-preview-button"
-            type="button"
-            onClick={() => setIssueCampaignPickerOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={issueCampaignPickerOpen}
-            disabled={recentCampaigns.length === 0}
-          >
-            <div className="coupon-brand">U<sup>+</sup></div>
-            <div className="coupon-copy">
-              <span>FREEDOM DAY</span>
-              <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
-              <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
-            </div>
-            <div className="coupon-badge">24H</div>
-          </button>
-
-          <form
-            className="issue-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              requestIssue()
-            }}
-          >
-            <label>
-              쿠폰 ID
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={eventId}
-                readOnly
-                aria-readonly="true"
-                placeholder="쿠폰 생성 후 자동 입력"
-              />
-            </label>
-            <label>
-              사용자 ID
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={userId}
-                onChange={(event) => setUserId(event.target.value)}
-                placeholder="예: 10001"
-              />
-            </label>
+          <div className="issue-composer">
             <button
-              className="primary-button"
-              type="submit"
-              disabled={submitting || selectedIssueCampaign?.status !== 'OPEN'}
+              className="coupon-preview coupon-preview-button"
+              type="button"
+              onClick={() => setIssueCampaignPickerOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={issueCampaignPickerOpen}
+              aria-label="최근 생성 쿠폰에서 발급할 쿠폰 선택"
+              disabled={recentCampaigns.length === 0}
             >
-              {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
-              <span>→</span>
+              <div className="coupon-brand">U<sup>+</sup></div>
+              <div className="coupon-copy">
+                <span>FREEDOM DAY</span>
+                <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
+                <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
+              </div>
+              <div className="coupon-badge">24H</div>
+              <span className="coupon-preview-hint">
+                최근 생성 쿠폰 보기
+                <span aria-hidden="true">→</span>
+              </span>
             </button>
-          </form>
-          <p className="form-help">
-            위 쿠폰 이미지를 눌러 최근 발급 회차를 선택하면 쿠폰 ID가 자동으로 고정됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
-          </p>
+
+            <div className="issue-request-area">
+              <span className="issue-request-kicker">ISSUE REQUEST</span>
+              <form
+                className="issue-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  requestIssue()
+                }}
+              >
+                <label>
+                  사용자 ID
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={userId}
+                    onChange={(event) => setUserId(event.target.value)}
+                    placeholder="예: 10001"
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={submitting || selectedIssueCampaign?.status !== 'OPEN'}
+                >
+                  {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
+                  <span>→</span>
+                </button>
+              </form>
+              <p className="form-help">
+                쿠폰 카드를 눌러 최근 생성 목록에서 발급할 쿠폰을 선택하세요.
+              </p>
+            </div>
+          </div>
         </article>
 
       </section>

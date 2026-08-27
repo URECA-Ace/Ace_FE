@@ -462,6 +462,13 @@ h1 {
   width: 100%;
 }
 
+.issue-composer {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 1.1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
 .test-tab-stack {
   display: grid;
   gap: 26px;
@@ -1279,7 +1286,7 @@ h1 {
 .monitor-body {
   padding: 20px 24px;
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(350px, 1.35fr) minmax(220px, 0.85fr);
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   gap: 12px;
   background: #fbfafc;
 }
@@ -1864,6 +1871,11 @@ h2 {
   box-shadow: 0 16px 30px rgba(196, 0, 111, 0.18);
 }
 
+.issue-composer .coupon-preview {
+  min-height: 150px;
+  padding: 20px;
+}
+
 .coupon-preview-button {
   border: 0;
   text-align: left;
@@ -1871,9 +1883,40 @@ h2 {
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
+.coupon-preview-hint {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 1;
+  padding: 7px 10px 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(70, 0, 62, 0.2);
+  font-size: 9px;
+  font-weight: 700;
+  backdrop-filter: blur(5px);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.coupon-preview-hint > span {
+  font-size: 14px;
+  line-height: 1;
+}
+
 .coupon-preview-button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 20px 36px rgba(196, 0, 111, 0.26);
+}
+
+.coupon-preview-button:hover:not(:disabled) .coupon-preview-hint,
+.coupon-preview-button:focus-visible .coupon-preview-hint {
+  border-color: rgba(255, 255, 255, 0.58);
+  background: rgba(70, 0, 62, 0.38);
+  transform: translateX(-2px);
 }
 
 .coupon-preview-button:focus-visible {
@@ -1920,6 +1963,11 @@ h2 {
 }
 
 .coupon-copy {
+  position: absolute;
+  left: 20px;
+  bottom: 50px;
+  z-index: 1;
+  max-width: calc(100% - 105px);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1933,15 +1981,23 @@ h2 {
 }
 
 .coupon-copy strong {
+  max-width: 100%;
   font-size: 26px;
   line-height: 1.18;
   letter-spacing: -1.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .coupon-copy small {
+  max-width: 100%;
   margin-top: 13px;
   font-size: 9px;
   opacity: 0.72;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .coupon-badge {
@@ -1959,10 +2015,31 @@ h2 {
 }
 
 .issue-form {
-  margin-top: 20px;
+  margin-top: 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.issue-request-area {
+  min-width: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid #ebe5ec;
+  border-radius: 13px;
+  background: #fcfbfd;
+}
+
+.issue-request-kicker {
+  color: var(--magenta);
+  font: 800 8px/1 Manrope, sans-serif;
+  letter-spacing: 1.2px;
+}
+
+.issue-request-area .form-help {
+  margin-top: 10px;
 }
 
 .issue-form label {
@@ -2140,8 +2217,8 @@ h2 {
 
 .user-tabs {
   display: grid;
-  height: 560px;
-  max-height: 560px;
+  height: 400px;
+  max-height: 400px;
   gap: 7px;
   padding: 2px 5px 2px 0;
   overflow-y: auto;
@@ -2779,9 +2856,13 @@ tbody tr:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .issue-composer {
+    grid-template-columns: 1fr;
+  }
+
   .issue-form,
   .issue-detail-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .panel {
@@ -2793,8 +2874,8 @@ tbody tr:hover {
   }
 
   .user-tabs {
-    height: 560px;
-    max-height: 560px;
+    height: 400px;
+    max-height: 400px;
   }
 
   .catalog-heading {
