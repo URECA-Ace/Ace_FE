@@ -35,7 +35,7 @@ function LoadTestTab({
           <span className="traffic-kicker">FIRST-COME, FIRST-SERVED TRAFFIC</span>
           <h2 id="traffic-title">재고 {expectedStock.toLocaleString()}장 · 참여자 {PARTICIPANT_COUNT.toLocaleString()}명</h2>
           <p>
-            재고 {expectedStock.toLocaleString()}장 캠페인에 서로 다른 사용자 {PARTICIPANT_COUNT.toLocaleString()}명이 발급을 요청합니다.
+            재고 {expectedStock.toLocaleString()}장 쿠폰에 서로 다른 사용자 {PARTICIPANT_COUNT.toLocaleString()}명이 발급을 요청합니다.
             승인과 재고 소진 응답을 실시간으로 집계해 초과 발급 여부를 확인합니다.
           </p>
           <div className="traffic-expectation">
@@ -150,7 +150,7 @@ function LoadTestTab({
           <small>
             {loadResult.finishedAt
               ? `소요 ${(loadResult.elapsedMs / 1000).toFixed(1)}초 · 최저 잔여 ${loadResult.remainingStock ?? '-'}장`
-              : '캠페인 관리에서 생성한 이벤트 ID로 실행하세요.'}
+              : '쿠폰 관리에서 생성한 이벤트 ID로 실행하세요.'}
           </small>
         </div>
       </div>
