@@ -450,15 +450,7 @@ function App() {
             onClick={() => setActiveTab('campaigns')}
           >
             <span className="nav-icon">◎</span>
-            캠페인 관리
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'loadtest' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveTab('loadtest')}
-          >
-            <span className="nav-icon">▤</span>
-            부하 테스트
+            쿠폰 관리
           </button>
           <button
             className={`nav-item ${activeTab === 'integrity' ? 'active' : ''}`}
@@ -467,6 +459,14 @@ function App() {
           >
             <span className="nav-icon">↗</span>
             정합성 리포트
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'loadtest' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('loadtest')}
+          >
+            <span className="nav-icon">▤</span>
+            테스트
           </button>
         </nav>
 
@@ -550,18 +550,58 @@ function App() {
         )}
 
         {activeTab === 'loadtest' && (
-          <LoadTestTab
-            loadEventId={loadEventId}
-            setLoadEventId={setLoadEventId}
-            openCampaigns={openCampaigns}
-            campaignLabel={campaignLabel}
-            concurrency={concurrency}
-            setConcurrency={setConcurrency}
-            loadResult={loadResult}
-            expectedStock={expectedLoadStock}
-            onSubmit={handleLoadSimulationSubmit}
-            onCancel={cancelLoadSimulation}
-          />
+          <div className="test-tab-stack">
+            <section className="test-section" aria-labelledby="load-test-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>01</span>
+                  <div>
+                    <p>LOAD VERIFICATION</p>
+                    <h2 id="load-test-section-title">부하 테스트</h2>
+                  </div>
+                </div>
+                <small>20,000명 동시 요청 · 초과 발급 검증</small>
+              </div>
+              <LoadTestTab
+                loadEventId={loadEventId}
+                setLoadEventId={setLoadEventId}
+                openCampaigns={openCampaigns}
+                campaignLabel={campaignLabel}
+                concurrency={concurrency}
+                setConcurrency={setConcurrency}
+                loadResult={loadResult}
+                expectedStock={expectedLoadStock}
+                onSubmit={handleLoadSimulationSubmit}
+                onCancel={cancelLoadSimulation}
+              />
+            </section>
+
+            <section className="test-section" aria-labelledby="coupon-state-test-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>02</span>
+                  <div>
+                    <p>COUPON STATE VERIFICATION</p>
+                    <h2 id="coupon-state-test-section-title">쿠폰 상태 변경 테스트</h2>
+                  </div>
+                </div>
+                <small>발급 사용자별 저장 상태 확인 · 변경 테스트</small>
+              </div>
+              <OperationsTab
+                view="coupon-control"
+                eventId={eventId}
+                setEventId={setEventId}
+                recentCampaigns={recentCampaigns}
+                openCampaigns={openCampaigns}
+                operationCampaign={operationCampaign}
+                setOperationCampaign={setOperationCampaign}
+                setNotice={setNotice}
+                campaignLabel={campaignLabel}
+                formatDate={formatDate}
+                errorLabels={ERROR_LABELS}
+              />
+            </section>
+          </div>
         )}
 
         {activeTab === 'integrity' && <IntegrityReportTab />}

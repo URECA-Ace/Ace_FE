@@ -65,6 +65,7 @@ function mergeStatus(record, data, source = 'POLL') {
 }
 
 function OperationsTab({
+  view = 'operations',
   eventId,
   setEventId,
   recentCampaigns,
@@ -199,7 +200,10 @@ function OperationsTab({
       setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
       return
     }
-    if (!selectedIssueCampaign || Number(selectedIssueCampaign.eventId) !== parsedEventId) {
+    const targetCampaign = recentCampaigns.find(
+      (campaign) => Number(campaign.eventId) === parsedEventId,
+    )
+    if (!targetCampaign) {
       setNotice({
         tone: 'danger',
         message: '최근 발급 회차에서 쿠폰을 발급할 캠페인을 선택하세요.',
@@ -244,8 +248,8 @@ function OperationsTab({
       const next = {
         id: recordId,
         eventId: parsedEventId,
-        couponName: retryRecord?.couponName ?? selectedIssueCampaign.couponName,
-        campaignRound: retryRecord?.campaignRound ?? selectedIssueCampaign.round,
+        couponName: retryRecord?.couponName ?? targetCampaign.couponName,
+        campaignRound: retryRecord?.campaignRound ?? targetCampaign.round,
         userId: parsedUserId,
         idempotencyKey,
         requestId: retryRecord?.requestId ?? null,
@@ -338,6 +342,115 @@ function OperationsTab({
 
   const selectedMeta = statusMeta(selected?.status)
 
+  const userControlPanel = (
+    <article className="panel user-panel coupon-control-test-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="section-number">02</span>
+          <h2>사용자 쿠폰 제어</h2>
+        </div>
+        {selected && <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>}
+      </div>
+
+      {records.length > 0 ? (
+        <>
+          <div className="user-tabs" role="tablist" aria-label="발급 사용자">
+            {records.map((record) => (
+              <button
+                key={record.id}
+                type="button"
+                role="tab"
+                aria-selected={record.id === selected?.id}
+                className={record.id === selected?.id ? 'selected' : ''}
+                onClick={() => setSelectedId(record.id)}
+              >
+                <span>U{record.userId}</span>
+                <small>{recordCampaignLabel(record, recentCampaigns)}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="user-summary">
+            <div className="user-identity">
+              <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
+              <div>
+                <strong>사용자 #{selected.userId}</strong>
+                <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={refreshSelected}
+              disabled={!selected.requestId}
+            >
+              상태 새로고침
+            </button>
+          </div>
+
+          <dl className="issue-detail-grid">
+            <div>
+              <dt>발급 순번</dt>
+              <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>잔여 수량</dt>
+              <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
+            </div>
+            <div>
+              <dt>요청 ID</dt>
+              <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
+            </div>
+            <div>
+              <dt>최근 확인</dt>
+              <dd>{formatDate(selected.lastCheckedAt)}</dd>
+            </div>
+          </dl>
+
+          {selected.error && (
+            <div className="error-box">
+              <strong>{selected.error.code}</strong>
+              <span>{selected.error.message}</span>
+              {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
+            </div>
+          )}
+
+          <div className="action-area">
+            <div className="action-heading">
+              <strong>상태 변경 이벤트</strong>
+              <span>백엔드 API 연결 대기</span>
+            </div>
+            <div className="action-buttons">
+              <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
+              <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
+              <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
+            </div>
+            {selected.status === 'REQUEST_FAILED' && (
+              <button
+                type="button"
+                className="retry-button"
+                onClick={() => requestIssue({ retryRecord: selected })}
+                disabled={submitting}
+              >
+                동일 Idempotency-Key로 재시도
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="empty-state">
+          <span>＋</span>
+          <strong>아직 발급 요청이 없습니다</strong>
+          <p>발급 운영에서 사용자 쿠폰을 발급한 뒤 상태 변경 테스트를 진행하세요.</p>
+        </div>
+      )}
+    </article>
+  )
+
+  if (view === 'coupon-control') {
+    return userControlPanel
+  }
+
   return (
     <>
       <section className="summary-grid" aria-label="발급 현황 요약">
@@ -370,7 +483,7 @@ function OperationsTab({
         recentCampaigns={openCampaigns}
       />
 
-      <section className="workspace-grid">
+      <section className="workspace-grid operations-workspace-grid">
         <article className="panel issue-panel">
           <div className="panel-heading">
             <div>
@@ -441,108 +554,6 @@ function OperationsTab({
           </p>
         </article>
 
-        <article className="panel user-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="section-number">02</span>
-              <h2>사용자 쿠폰 제어</h2>
-            </div>
-            {selected && <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>}
-          </div>
-
-          {records.length > 0 ? (
-            <>
-              <div className="user-tabs" role="tablist" aria-label="발급 사용자">
-                {records.map((record) => (
-                  <button
-                    key={record.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={record.id === selected?.id}
-                    className={record.id === selected?.id ? 'selected' : ''}
-                    onClick={() => setSelectedId(record.id)}
-                  >
-                    <span>U{record.userId}</span>
-                    <small>{recordCampaignLabel(record, recentCampaigns)}</small>
-                  </button>
-                ))}
-              </div>
-
-              <div className="user-summary">
-                <div className="user-identity">
-                  <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
-                  <div>
-                    <strong>사용자 #{selected.userId}</strong>
-                    <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={refreshSelected}
-                  disabled={!selected.requestId}
-                >
-                  상태 새로고침
-                </button>
-              </div>
-
-              <dl className="issue-detail-grid">
-                <div>
-                  <dt>발급 순번</dt>
-                  <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
-                </div>
-                <div>
-                  <dt>잔여 수량</dt>
-                  <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
-                </div>
-                <div>
-                  <dt>요청 ID</dt>
-                  <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
-                </div>
-                <div>
-                  <dt>최근 확인</dt>
-                  <dd>{formatDate(selected.lastCheckedAt)}</dd>
-                </div>
-              </dl>
-
-              {selected.error && (
-                <div className="error-box">
-                  <strong>{selected.error.code}</strong>
-                  <span>{selected.error.message}</span>
-                  {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
-                </div>
-              )}
-
-              <div className="action-area">
-                <div className="action-heading">
-                  <strong>상태 변경 이벤트</strong>
-                  <span>백엔드 API 연결 대기</span>
-                </div>
-                <div className="action-buttons">
-                  <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
-                  <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
-                  <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
-                </div>
-                {selected.status === 'REQUEST_FAILED' && (
-                  <button
-                    type="button"
-                    className="retry-button"
-                    onClick={() => requestIssue({ retryRecord: selected })}
-                    disabled={submitting}
-                  >
-                    동일 Idempotency-Key로 재시도
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="empty-state">
-              <span>＋</span>
-              <strong>아직 발급 요청이 없습니다</strong>
-              <p>왼쪽에서 사용자 ID를 입력하고 첫 쿠폰을 발급해보세요.</p>
-            </div>
-          )}
-        </article>
       </section>
 
       <section className="history-grid">

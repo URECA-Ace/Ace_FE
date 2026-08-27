@@ -398,6 +398,79 @@ h1 {
   margin-bottom: 16px;
 }
 
+.operations-workspace-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.operations-workspace-grid .issue-panel {
+  width: 100%;
+}
+
+.test-tab-stack {
+  display: grid;
+  gap: 26px;
+}
+
+.test-section {
+  min-width: 0;
+}
+
+.test-section-heading {
+  margin-bottom: 11px;
+  padding: 0 3px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.test-section-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.test-section-heading > div > span {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--magenta), #ae006f);
+  box-shadow: 0 7px 16px rgba(230, 0, 126, 0.16);
+  font: 800 9px/1 Manrope, sans-serif;
+}
+
+.test-section-heading p,
+.test-section-heading h2 {
+  margin: 0;
+}
+
+.test-section-heading p {
+  margin-bottom: 4px;
+  color: var(--magenta);
+  font: 800 8px/1 Manrope, sans-serif;
+  letter-spacing: 1px;
+}
+
+.test-section-heading h2 {
+  color: var(--ink);
+  font-size: 18px;
+  letter-spacing: -0.6px;
+}
+
+.test-section-heading > small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.coupon-control-test-panel {
+  width: 100%;
+  min-height: 360px;
+  margin-bottom: 0;
+}
+
 .history-grid {
   grid-template-columns: 1.3fr 0.8fr;
 }
