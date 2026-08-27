@@ -46,6 +46,8 @@ const ERROR_LABELS = {
   CAMPAIGN_INIT_FAILED: 'Redis 캠페인 초기화에 실패했습니다.',
   CAMPAIGN_INITIALIZATION_TEMPORARILY_UNAVAILABLE:
     '캠페인은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
+  CAMPAIGN_CLOSE_TEMPORARILY_UNAVAILABLE: '캠페인을 일시적으로 마감할 수 없습니다. 잠시 후 다시 시도하세요.',
+  INVALID_STATE_TRANSITION: '현재 상태에서는 요청한 변경을 수행할 수 없습니다.',
   ISSUE_NOT_FOUND: '발급 요청을 찾을 수 없습니다.',
   ISSUE_TEMPORARILY_UNAVAILABLE: '발급 시스템을 일시적으로 사용할 수 없습니다.',
   BACKEND_UNAVAILABLE: '백엔드 서버에 연결할 수 없습니다. Spring 서버가 실행 중인지 확인하세요.',

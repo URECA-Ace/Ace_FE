@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ApiError, createCoupon, createCouponEvent, initializeCampaign } from '../api/couponApi'
+import { ApiError, closeCouponEvent, createCoupon, createCouponEvent, initializeCampaign } from '../api/couponApi'
 import ScheduledOpenTimeline from '../components/ScheduledOpenTimeline'
 
 function toDateTimeLocal(date) {
@@ -72,6 +72,7 @@ function CampaignManagementTab({
   const [initializationEventId, setInitializationEventId] = useState('')
   const [initializingCampaign, setInitializingCampaign] = useState(false)
   const [initializationResult, setInitializationResult] = useState(null)
+  const [closingEventId, setClosingEventId] = useState(null)
 
   const selectedCoupon = coupons.find(
     (coupon) => String(coupon.couponId) === String(selectedCouponId),
@@ -279,6 +280,55 @@ function CampaignManagementTab({
     }
   }
 
+  async function closeEvent(campaign) {
+    if (!window.confirm('쿠폰을 마감하시겠습니까?')) return
+
+    setClosingEventId(campaign.eventId)
+    setNotice(null)
+    try {
+      const data = await closeCouponEvent(campaign.eventId)
+      const closedCampaign = { ...campaign, ...data }
+      const nextOpenCampaign = recentCampaigns.find(
+        (item) => item.status === 'OPEN' && String(item.eventId) !== String(campaign.eventId),
+      )
+
+      setRecentCampaigns((current) => current.map((item) => (
+        String(item.eventId) === String(campaign.eventId) ? closedCampaign : item
+      )))
+      setOpenCampaigns((current) => current.filter(
+        (item) => String(item.eventId) !== String(campaign.eventId),
+      ))
+      setCreatedEvent((current) => (
+        String(current?.eventId) === String(campaign.eventId) ? closedCampaign : current
+      ))
+      setOperationCampaign((current) => (
+        String(current?.eventId) === String(campaign.eventId)
+          ? nextOpenCampaign ?? closedCampaign
+          : current
+      ))
+      setEventId((current) => (
+        String(current) === String(campaign.eventId)
+          ? String(nextOpenCampaign?.eventId ?? '')
+          : current
+      ))
+      setLoadEventId((current) => (
+        String(current) === String(campaign.eventId)
+          ? String(nextOpenCampaign?.eventId ?? '')
+          : current
+      ))
+      setNotice({
+        tone: 'success',
+        toast: true,
+        message: `${campaign.couponName} ${campaign.round}회차를 마감했습니다.`,
+      })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
+    } finally {
+      setClosingEventId(null)
+    }
+  }
+
   return (
     <>
       <section className="campaign-management" aria-labelledby="campaign-management-title">
@@ -454,34 +504,12 @@ function CampaignManagementTab({
           )}
         </section>
 
-        <section className="schedule-management-grid">
-          <article className="panel schedule-overview" aria-labelledby="schedule-overview-title">
-            <div className="panel-heading">
-              <div>
-                <span className="section-number">01</span>
-                <h2 id="schedule-overview-title">예약 오픈 일정</h2>
-              </div>
-              <span className="api-chip subtle">SERVER SCHEDULE</span>
-            </div>
-            {createdEvent ? (
-              <dl className="schedule-detail-grid">
-                <div><dt>이벤트</dt><dd>#{createdEvent.eventId} · {createdEvent.round}회차</dd></div>
-                <div><dt>현재 상태</dt><dd>{createdEvent.status}</dd></div>
-                <div><dt>오픈 시각</dt><dd>{formatDate(createdEvent.openAt)}</dd></div>
-                <div><dt>마감 시각</dt><dd>{formatDate(createdEvent.closeAt)}</dd></div>
-              </dl>
-            ) : (
-              <div className="empty-state small">
-                <strong>생성된 이벤트가 없습니다</strong>
-                <p>이벤트를 생성하면 예약 오픈 일정이 표시됩니다.</p>
-              </div>
-            )}
-          </article>
-          <ScheduledOpenTimeline
-            status={createdEvent?.status}
-            observedAt={createdEvent?.openAt}
-          />
-        </section>
+        <ScheduledOpenTimeline
+          campaigns={recentCampaigns}
+          closingEventId={closingEventId}
+          formatDate={formatDate}
+          onClose={closeEvent}
+        />
 
         <section className="panel campaign-initialization" aria-labelledby="campaign-initialization-title">
           <div className="panel-heading">
