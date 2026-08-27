@@ -937,6 +937,38 @@ h1 {
   box-shadow: 0 24px 70px rgba(25, 21, 29, 0.24);
 }
 
+.close-confirm-modal {
+  width: min(320px, 100%);
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(25, 21, 29, 0.24);
+}
+
+.close-confirm-modal h2 {
+  margin: 0 0 18px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.close-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.close-confirm-actions .coupon-picker-cancel,
+.close-confirm-actions .primary-button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 0;
+}
+
+.close-confirm-actions .primary-button {
+  grid-column: auto;
+}
+
 .coupon-picker-header {
   display: flex;
   justify-content: space-between;

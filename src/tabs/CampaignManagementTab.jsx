@@ -73,6 +73,7 @@ function CampaignManagementTab({
   const [initializingCampaign, setInitializingCampaign] = useState(false)
   const [initializationResult, setInitializationResult] = useState(null)
   const [closingEventId, setClosingEventId] = useState(null)
+  const [closeConfirmCampaign, setCloseConfirmCampaign] = useState(null)
 
   const selectedCoupon = coupons.find(
     (coupon) => String(coupon.couponId) === String(selectedCouponId),
@@ -281,8 +282,6 @@ function CampaignManagementTab({
   }
 
   async function closeEvent(campaign) {
-    if (!window.confirm('쿠폰을 마감하시겠습니까?')) return
-
     setClosingEventId(campaign.eventId)
     setNotice(null)
     try {
@@ -327,6 +326,10 @@ function CampaignManagementTab({
     } finally {
       setClosingEventId(null)
     }
+  }
+
+  function requestClose(campaign) {
+    setCloseConfirmCampaign(campaign)
   }
 
   return (
@@ -506,7 +509,7 @@ function CampaignManagementTab({
           campaigns={recentCampaigns}
           closingEventId={closingEventId}
           formatDate={formatDate}
-          onClose={closeEvent}
+          onClose={requestClose}
         />
 
         <section className="panel campaign-initialization" aria-labelledby="campaign-initialization-title">
@@ -661,6 +664,42 @@ function CampaignManagementTab({
               <p className="catalog-empty">선택할 쿠폰이 없습니다. 먼저 발급 회차를 생성하세요.</p>
             )}
             <button type="button" className="coupon-picker-cancel" onClick={() => setCampaignPickerOpen(false)}>닫기</button>
+          </section>
+        </div>
+      )}
+
+      {closeConfirmCampaign && (
+        <div
+          className="coupon-picker-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !closingEventId) setCloseConfirmCampaign(null)
+          }}
+        >
+          <section className="close-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="close-confirm-title">
+            <h2 id="close-confirm-title">쿠폰 회차를 마감할까요?</h2>
+            <div className="close-confirm-actions">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  const campaign = closeConfirmCampaign
+                  setCloseConfirmCampaign(null)
+                  closeEvent(campaign)
+                }}
+                disabled={Boolean(closingEventId)}
+              >
+                {closingEventId ? '마감 중…' : '마감'}
+              </button>
+              <button
+                type="button"
+                className="coupon-picker-cancel"
+                onClick={() => setCloseConfirmCampaign(null)}
+                disabled={Boolean(closingEventId)}
+              >
+                취소
+              </button>
+            </div>
           </section>
         </div>
       )}

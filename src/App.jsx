@@ -320,7 +320,7 @@ function App() {
   useEffect(() => {
     if (!notice?.toast) return undefined
 
-    const timer = window.setTimeout(() => setNotice(null), 4000)
+    const timer = window.setTimeout(() => setNotice(null), 5000)
     return () => window.clearTimeout(timer)
   }, [notice])
 
