@@ -128,6 +128,14 @@ export function createCouponEvent(couponId, payload, signal) {
   })
 }
 
+export function closeCouponEvent(eventId, signal) {
+  return request(`/api/v1/events/${eventId}/close`, {
+    method: 'PATCH',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function initializeCampaign(eventId, signal) {
   return request(`/internal/campaigns/${eventId}/init`, {
     method: 'POST',

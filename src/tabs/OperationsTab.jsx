@@ -18,7 +18,7 @@ const STATUS_META = {
   REQUEST_FAILED: { label: '요청 실패', tone: 'danger' },
 }
 
-function loadRecords() {
+export function loadRecords() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     return stored ? JSON.parse(stored) : []
@@ -65,6 +65,9 @@ function mergeStatus(record, data, source = 'POLL') {
 }
 
 function OperationsTab({
+  view = 'operations',
+  sharedRecords,
+  setSharedRecords,
   eventId,
   setEventId,
   recentCampaigns,
@@ -76,12 +79,15 @@ function OperationsTab({
   formatDate,
   errorLabels,
 }) {
-  const [records, setRecords] = useState(loadRecords)
+  const [localRecords, setLocalRecords] = useState(loadRecords)
+  const records = sharedRecords ?? localRecords
+  const updateRecords = setSharedRecords ?? setLocalRecords
   const [selectedId, setSelectedId] = useState(() => loadRecords()[0]?.id ?? null)
   const [userId, setUserId] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [issueCampaignPickerOpen, setIssueCampaignPickerOpen] = useState(false)
   const [historyScope, setHistoryScope] = useState('current')
+  const [userSearch, setUserSearch] = useState('')
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedIssueCampaign = recentCampaigns.find(
@@ -98,11 +104,18 @@ function OperationsTab({
   const visibleHistoryRecords = historyScope === 'current'
     ? currentCampaignRecords
     : records
-  const redisDecisionHistory = [...currentCampaignRecords]
-    .filter((record) => Number.isSafeInteger(Number(record.issueSequence)))
-    .sort((left, right) => Number(right.issueSequence) - Number(left.issueSequence))
+  const statusHistoryRecords = [...currentCampaignRecords]
+    .filter((record) => (
+      Number.isSafeInteger(Number(record.issueSequence))
+      || record.status === 'REJECTED_DUPLICATE'
+    ))
+    .sort((left, right) => (
+      new Date(right.acceptedAt ?? right.lastCheckedAt).getTime()
+      - new Date(left.acceptedAt ?? left.lastCheckedAt).getTime()
+    ))
   const campaignHasStarted = selectedIssueCampaign
     && selectedIssueCampaign.status !== 'SCHEDULED'
+  const campaignHasClosed = selectedIssueCampaign?.status === 'CLOSED'
 
   function recordCampaignLabel(record, campaigns) {
     const campaign = campaigns.find(
@@ -114,6 +127,13 @@ function OperationsTab({
       round: record.campaignRound ?? campaign?.round,
     })
   }
+
+  const visibleUserRecords = userSearch.trim()
+    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE' && (
+        String(record.userId).includes(userSearch.trim())
+        || recordCampaignLabel(record, recentCampaigns).toLowerCase().includes(userSearch.trim().toLowerCase())
+      ))
+    : records.filter((record) => record.status !== 'REJECTED_DUPLICATE')
 
   useEffect(() => {
     if (!issueCampaignPickerOpen) return undefined
@@ -151,7 +171,7 @@ function OperationsTab({
           selectedPendingRequestId,
           controller.signal,
         )
-        setRecords((current) =>
+        updateRecords((current) =>
           current.map((item) =>
             item.id === selectedPendingId ? mergeStatus(item, data) : item,
           ),
@@ -169,7 +189,7 @@ function OperationsTab({
       window.clearInterval(timer)
       controller.abort()
     }
-  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId])
+  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId, updateRecords])
 
   const summary = useMemo(() => {
     const accepted = records.filter((record) =>
@@ -179,7 +199,7 @@ function OperationsTab({
       record.status === 'PROCESSING',
     ).length
     const failed = records.filter((record) =>
-      ['FAILED', 'COMPENSATED', 'REQUEST_FAILED'].includes(record.status),
+      ['FAILED', 'COMPENSATED', 'REJECTED_DUPLICATE', 'REQUEST_FAILED'].includes(record.status),
     ).length
     const latestStock = records.find(
       (record) => record.remainingStock !== null && record.remainingStock !== undefined,
@@ -192,17 +212,20 @@ function OperationsTab({
     const parsedUserId = Number(retryRecord?.userId ?? userId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
       setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
       return
     }
-    if (!selectedIssueCampaign || Number(selectedIssueCampaign.eventId) !== parsedEventId) {
+    const targetCampaign = recentCampaigns.find(
+      (campaign) => Number(campaign.eventId) === parsedEventId,
+    )
+    if (!targetCampaign) {
       setNotice({
         tone: 'danger',
-        message: '최근 발급 회차에서 쿠폰을 발급할 캠페인을 선택하세요.',
+        message: '최근 발급 회차에서 쿠폰을 발급할 쿠폰을 선택하세요.',
       })
       return
     }
@@ -212,7 +235,7 @@ function OperationsTab({
       if (stats.status !== 'OPEN') {
         setNotice({
           tone: 'danger',
-          message: `캠페인 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 캠페인만 발급할 수 있습니다.`,
+          message: `쿠폰 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
         })
         return
       }
@@ -221,13 +244,18 @@ function OperationsTab({
       setNotice({
         tone: 'danger',
         message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
-          ? 'Redis에 초기화되지 않은 캠페인입니다. 캠페인 관리에서 새 이벤트를 생성하세요.'
+          ? 'Redis에 초기화되지 않은 쿠폰입니다. 쿠폰 관리에서 새 이벤트를 생성하세요.'
           : errorLabels[apiError.code] ?? apiError.message,
       })
       return
     }
 
-    const recordId = `${parsedEventId}:${parsedUserId}`
+    const recordId = retryRecord?.id ?? `${parsedEventId}:${parsedUserId}:${crypto.randomUUID()}`
+    const previousUserRecord = records.find((record) => (
+      String(record.eventId) === String(parsedEventId)
+      && String(record.userId) === String(parsedUserId)
+      && record.status !== 'REJECTED_DUPLICATE'
+    ))
     const idempotencyKey = retryRecord?.idempotencyKey ?? crypto.randomUUID()
     const initialEvent = eventItem(
       retryRecord ? 'RETRY' : 'REQUEST',
@@ -239,13 +267,13 @@ function OperationsTab({
     setSubmitting(true)
     setNotice(null)
     setSelectedId(recordId)
-    setRecords((current) => {
-      const previous = current.find((record) => record.id === recordId)
+    updateRecords((current) => {
+      const previous = retryRecord ?? current.find((record) => record.id === recordId)
       const next = {
         id: recordId,
         eventId: parsedEventId,
-        couponName: retryRecord?.couponName ?? selectedIssueCampaign.couponName,
-        campaignRound: retryRecord?.campaignRound ?? selectedIssueCampaign.round,
+        couponName: retryRecord?.couponName ?? targetCampaign.couponName,
+        campaignRound: retryRecord?.campaignRound ?? targetCampaign.round,
         userId: parsedUserId,
         idempotencyKey,
         requestId: retryRecord?.requestId ?? null,
@@ -262,7 +290,7 @@ function OperationsTab({
 
     try {
       const data = await issueCoupon(parsedEventId, parsedUserId, idempotencyKey)
-      setRecords((current) =>
+      updateRecords((current) =>
         current.map((record) =>
           record.id === recordId
             ? {
@@ -287,23 +315,25 @@ function OperationsTab({
       if (!retryRecord) setUserId('')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
-      const message = errorLabels[apiError.code] ?? apiError.message
-      setRecords((current) =>
+      const isDuplicate = apiError.code === 'ALREADY_ISSUED'
+      const message = isDuplicate ? '이미 발급된 사용자입니다. 중복 발급이 차단되었습니다.' : (errorLabels[apiError.code] ?? apiError.message)
+      updateRecords((current) =>
         current.map((record) =>
           record.id === recordId
             ? {
                 ...record,
-                status: 'REQUEST_FAILED',
+                status: isDuplicate ? 'REJECTED_DUPLICATE' : 'REQUEST_FAILED',
                 error: { code: apiError.code, message, incidentId: apiError.incidentId },
                 lastCheckedAt: new Date().toISOString(),
                 events: [
-                  eventItem('ERROR', apiError.code, message, 'danger'),
+                  eventItem(isDuplicate ? 'DUPLICATE' : 'ERROR', isDuplicate ? '중복 발급 차단' : apiError.code, message, 'danger'),
                   ...record.events,
                 ],
               }
             : record,
         ),
       )
+      if (isDuplicate && previousUserRecord) setSelectedId(previousUserRecord.id)
       setNotice({ tone: 'danger', message })
     } finally {
       setSubmitting(false)
@@ -315,7 +345,7 @@ function OperationsTab({
     setNotice(null)
     try {
       const data = await getIssueStatus(selected.eventId, selected.requestId)
-      setRecords((current) =>
+      updateRecords((current) =>
         current.map((record) =>
           record.id === selected.id ? mergeStatus(record, data, 'REFRESH') : record,
         ),
@@ -331,150 +361,82 @@ function OperationsTab({
   }
 
   function clearRecords() {
-    setRecords([])
+    updateRecords([])
     setSelectedId(null)
     setNotice({ tone: 'neutral', message: '브라우저에 저장된 시연 기록을 비웠습니다.' })
   }
 
   const selectedMeta = statusMeta(selected?.status)
 
-  return (
-    <>
-      <section className="summary-grid" aria-label="발급 현황 요약">
-        <article className="summary-card accent-card">
-          <div>
-            <span>최근 확인 잔여 수량</span>
-            <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
-          </div>
-          <span className="summary-unit">장</span>
-        </article>
-        <article className="summary-card">
-          <span>발급 판정 승인</span>
-          <strong>{summary.accepted.toLocaleString()}</strong>
-          <small>Redis 원자적 판정 통과</small>
-        </article>
-        <article className="summary-card">
-          <span>처리 중</span>
-          <strong>{summary.processing.toLocaleString()}</strong>
-          <small>3초 간격 자동 조회</small>
-        </article>
-        <article className="summary-card">
-          <span>실패 · 원복</span>
-          <strong>{summary.failed.toLocaleString()}</strong>
-          <small>확인이 필요한 요청</small>
-        </article>
-      </section>
+  const userControlPanel = (
+    <article className="panel user-panel coupon-control-test-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="section-number">02</span>
+          <h2>사용자 쿠폰 제어</h2>
+        </div>
+      </div>
 
-      <CampaignMonitor
-        selectedEventId={operationCampaign?.eventId}
-        recentCampaigns={openCampaigns}
-      />
-
-      <section className="workspace-grid">
-        <article className="panel issue-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="section-number">01</span>
-              <h2>쿠폰 발급</h2>
-            </div>
-            <span className="api-chip">POST · /api/v1/events/{'{eventId}'}/issues</span>
-          </div>
-
-          <button
-            className="coupon-preview coupon-preview-button"
-            type="button"
-            onClick={() => setIssueCampaignPickerOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={issueCampaignPickerOpen}
-            disabled={recentCampaigns.length === 0}
-          >
-            <div className="coupon-brand">U<sup>+</sup></div>
-            <div className="coupon-copy">
-              <span>FREEDOM DAY</span>
-              <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
-              <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
-            </div>
-            <div className="coupon-badge">24H</div>
-          </button>
-
-          <form
-            className="issue-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              requestIssue()
-            }}
-          >
-            <label>
-              캠페인 ID
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={eventId}
-                readOnly
-                aria-readonly="true"
-                placeholder="캠페인 생성 후 자동 입력"
-              />
-            </label>
-            <label>
-              사용자 ID
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={userId}
-                onChange={(event) => setUserId(event.target.value)}
-                placeholder="예: 10001"
-              />
-            </label>
-            <button
-              className="primary-button"
-              type="submit"
-              disabled={submitting || selectedIssueCampaign?.status !== 'OPEN'}
-            >
-              {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
-              <span>→</span>
-            </button>
-          </form>
-          <p className="form-help">
-            위 쿠폰 이미지를 눌러 최근 발급 회차를 선택하면 캠페인 ID가 자동으로 고정됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
-          </p>
-        </article>
-
-        <article className="panel user-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="section-number">02</span>
-              <h2>사용자 쿠폰 제어</h2>
-            </div>
-            {selected && <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>}
-          </div>
-
-          {records.length > 0 ? (
-            <>
-              <div className="user-tabs" role="tablist" aria-label="발급 사용자">
-                {records.map((record) => (
-                  <button
-                    key={record.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={record.id === selected?.id}
-                    className={record.id === selected?.id ? 'selected' : ''}
-                    onClick={() => setSelectedId(record.id)}
-                  >
-                    <span>U{record.userId}</span>
-                    <small>{recordCampaignLabel(record, recentCampaigns)}</small>
-                  </button>
-                ))}
+      {records.length > 0 ? (
+        <>
+          <div className="user-control-layout">
+            <section className="user-directory" aria-labelledby="recent-user-list-title">
+              <div className="user-directory-heading">
+                <div>
+                  <span>RECENT ISSUANCE</span>
+                  <h3 id="recent-user-list-title">최근 발급 사용자</h3>
+                </div>
+                <small>{userSearch.trim() ? `${visibleUserRecords.length}명 검색됨` : `전체 ${records.length}명 · 최신순`}</small>
               </div>
+              <label className="user-search-field" htmlFor="coupon-user-search">
+                사용자 검색
+                <input
+                  id="coupon-user-search"
+                  type="search"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                  placeholder="사용자 ID 또는 발급 회차"
+                />
+              </label>
+              {visibleUserRecords.length > 0 ? (
+                <div className="user-tabs" role="list" aria-label="발급 사용자 목록">
+                  {visibleUserRecords.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      role="listitem"
+                      aria-pressed={record.id === selected?.id}
+                      className={record.id === selected?.id ? 'selected' : ''}
+                      onClick={() => setSelectedId(record.id)}
+                    >
+                      <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
+                      <span className="user-list-copy">
+                        <strong>사용자 #{record.userId}</strong>
+                        <small>{recordCampaignLabel(record, recentCampaigns)}</small>
+                      </span>
+                      <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
+                        {statusMeta(record.status).label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="user-search-empty">검색 결과가 없습니다.</div>
+              )}
+            </section>
 
-              <div className="user-summary">
-                <div className="user-identity">
-                  <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
-                  <div>
-                    <strong>사용자 #{selected.userId}</strong>
-                    <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+            {visibleUserRecords.length > 0 && selected && (
+              <aside className="user-detail-panel" aria-labelledby="selected-user-title">
+                <div className="user-detail-heading">
+                  <div className="user-identity">
+                    <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
+                    <div>
+                      <span className="user-detail-kicker">SELECTED USER</span>
+                      <strong id="selected-user-title">사용자 #{selected.userId}</strong>
+                      <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+                    </div>
                   </div>
+                  <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>
                 </div>
                 <button
                   type="button"
@@ -484,65 +446,185 @@ function OperationsTab({
                 >
                   상태 새로고침
                 </button>
-              </div>
 
-              <dl className="issue-detail-grid">
-                <div>
-                  <dt>발급 순번</dt>
-                  <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
-                </div>
-                <div>
-                  <dt>잔여 수량</dt>
-                  <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
-                </div>
-                <div>
-                  <dt>요청 ID</dt>
-                  <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
-                </div>
-                <div>
-                  <dt>최근 확인</dt>
-                  <dd>{formatDate(selected.lastCheckedAt)}</dd>
-                </div>
-              </dl>
-
-              {selected.error && (
-                <div className="error-box">
-                  <strong>{selected.error.code}</strong>
-                  <span>{selected.error.message}</span>
-                  {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
-                </div>
-              )}
-
-              <div className="action-area">
-                <div className="action-heading">
-                  <strong>상태 변경 이벤트</strong>
-                  <span>백엔드 API 연결 대기</span>
-                </div>
-                <div className="action-buttons">
-                  <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
-                  <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
-                  <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
-                </div>
-                {selected.status === 'REQUEST_FAILED' && (
-                  <button
-                    type="button"
-                    className="retry-button"
-                    onClick={() => requestIssue({ retryRecord: selected })}
-                    disabled={submitting}
-                  >
-                    동일 Idempotency-Key로 재시도
-                  </button>
+                {records.some((record) => (
+                  String(record.eventId) === String(selected.eventId)
+                  && String(record.userId) === String(selected.userId)
+                  && record.status === 'REJECTED_DUPLICATE'
+                )) && (
+                  <div className="duplicate-notice" role="status">
+                    <strong>중복 발급 요청이 있었습니다.</strong>
+                    <span>이미 발급된 사용자라 추가 발급은 차단되었습니다.</span>
+                  </div>
                 )}
-              </div>
-            </>
-          ) : (
-            <div className="empty-state">
-              <span>＋</span>
-              <strong>아직 발급 요청이 없습니다</strong>
-              <p>왼쪽에서 사용자 ID를 입력하고 첫 쿠폰을 발급해보세요.</p>
+
+                <dl className="issue-detail-grid">
+            <div>
+              <dt>발급 순번</dt>
+              <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>잔여 수량</dt>
+              <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
+            </div>
+            <div>
+              <dt>요청 ID</dt>
+              <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
+            </div>
+            <div>
+              <dt>최근 확인</dt>
+              <dd>{formatDate(selected.lastCheckedAt)}</dd>
+            </div>
+          </dl>
+
+          {selected.error && (
+            <div className="error-box">
+              <strong>{selected.error.code}</strong>
+              <span>{selected.error.message}</span>
+              {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
             </div>
           )}
+
+          <div className="action-area">
+            <div className="action-heading">
+              <strong>상태 변경 이벤트</strong>
+              <span>백엔드 API 연결 대기</span>
+            </div>
+            <div className="action-buttons">
+              <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
+              <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
+              <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
+            </div>
+            {selected.status === 'REQUEST_FAILED' && (
+              <button
+                type="button"
+                className="retry-button"
+                onClick={() => requestIssue({ retryRecord: selected })}
+                disabled={submitting}
+              >
+                동일 Idempotency-Key로 재시도
+              </button>
+            )}
+          </div>
+              </aside>
+            )}
+            </div>
+        </>
+      ) : (
+        <div className="empty-state">
+          <span>＋</span>
+          <strong>아직 발급 요청이 없습니다</strong>
+          <p>발급 운영에서 사용자 쿠폰을 발급한 뒤 상태 변경 테스트를 진행하세요.</p>
+        </div>
+      )}
+    </article>
+  )
+
+  if (view === 'coupon-control') {
+    return userControlPanel
+  }
+
+  if (view === 'monitor') {
+    return (
+      <>
+        <section className="summary-grid" aria-label="발급 현황 요약">
+          <article className="summary-card accent-card stock-card">
+            <div>
+              <span>최근 확인 잔여 수량</span>
+              <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
+            </div>
+          </article>
+          <article className="summary-card approval-card">
+            <span>발급 판정 승인</span>
+            <strong>{summary.accepted.toLocaleString()}</strong>
+          </article>
+          <article className="summary-card processing-card">
+            <span>처리 중</span>
+            <strong>{summary.processing.toLocaleString()}</strong>
+          </article>
+          <article className="summary-card failure-card">
+            <span>실패 · 원복</span>
+            <strong>{summary.failed.toLocaleString()}</strong>
+          </article>
+        </section>
+        <CampaignMonitor
+          selectedEventId={operationCampaign?.eventId}
+          recentCampaigns={recentCampaigns}
+        />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <section className="workspace-grid operations-workspace-grid">
+        <article className="panel issue-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="section-number">01</span>
+              <h2>쿠폰 발급</h2>
+            </div>
+          </div>
+
+          <div className="issue-composer">
+            <button
+              className="coupon-preview coupon-preview-button"
+              type="button"
+              onClick={() => setIssueCampaignPickerOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={issueCampaignPickerOpen}
+              aria-label="최근 생성 쿠폰에서 발급할 쿠폰 선택"
+              disabled={recentCampaigns.length === 0}
+            >
+              <div className="coupon-brand">U<sup>+</sup></div>
+              <div className="coupon-copy">
+                <span>FREEDOM DAY</span>
+                <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
+                <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
+              </div>
+              <div className="coupon-badge">24H</div>
+              <span className="coupon-preview-hint">
+                최근 생성 쿠폰 보기
+                <span aria-hidden="true">→</span>
+              </span>
+            </button>
+
+            <div className="issue-request-area">
+              <span className="issue-request-kicker">ISSUE REQUEST</span>
+              <form
+                className="issue-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  requestIssue()
+                }}
+              >
+                <label>
+                  사용자 ID
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={userId}
+                    onChange={(event) => setUserId(event.target.value)}
+                    placeholder="예: 10001"
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={submitting || selectedIssueCampaign?.status !== 'OPEN'}
+                >
+                  {submitting ? 'Redis 판정 중…' : '쿠폰 발급 요청'}
+                  <span>→</span>
+                </button>
+              </form>
+              <p className="form-help">
+                쿠폰 카드를 눌러 최근 생성 목록에서 발급할 쿠폰을 선택하세요.
+              </p>
+            </div>
+          </div>
         </article>
+
       </section>
 
       <section className="history-grid">
@@ -572,7 +654,7 @@ function OperationsTab({
               className={historyScope === 'current' ? 'selected' : ''}
               onClick={() => setHistoryScope('current')}
             >
-              현재 캠페인
+              현재 쿠폰
               <span>{currentCampaignRecords.length.toLocaleString()}</span>
             </button>
           </div>
@@ -581,7 +663,7 @@ function OperationsTab({
               <thead>
                 <tr>
                   <th>사용자</th>
-                  <th>캠페인</th>
+                  <th>쿠폰</th>
                   <th>순번</th>
                   <th>상태</th>
                   <th>요청 시각</th>
@@ -603,7 +685,7 @@ function OperationsTab({
                   <tr>
                     <td colSpan="5" className="table-empty">
                       {historyScope === 'current'
-                        ? '현재 캠페인의 API 응답 이력이 없습니다.'
+                        ? '현재 쿠폰의 API 응답 이력이 없습니다.'
                         : 'API 응답 이력이 없습니다.'}
                     </td>
                   </tr>
@@ -621,12 +703,37 @@ function OperationsTab({
               <h2>쿠폰 상태 이력</h2>
             </div>
             <span className="api-chip subtle">
-              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '캠페인 선택 대기'}
+              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
             </span>
           </div>
-          {redisDecisionHistory.length > 0 || campaignHasStarted ? (
+          {statusHistoryRecords.length > 0 || campaignHasStarted || campaignHasClosed ? (
             <ol className="timeline">
-              {redisDecisionHistory.map((record) => (
+              {campaignHasClosed && (
+                <li>
+                  <span className="timeline-dot" />
+                  <div>
+                    <div className="timeline-title">
+                      <strong>쿠폰 회차 마감</strong>
+                      <time>{formatDate(selectedIssueCampaign.statusChangedAt ?? selectedIssueCampaign.closeAt)}</time>
+                    </div>
+                    <p>
+                      {campaignLabel(selectedIssueCampaign)} · 예약 마감 또는 관리자 수동 마감으로 쿠폰 발급 종료
+                    </p>
+                  </div>
+                </li>
+              )}
+              {statusHistoryRecords.map((record) => record.status === 'REJECTED_DUPLICATE' ? (
+                <li key={`${record.id}:duplicate`} className="danger">
+                  <span className="timeline-dot" />
+                  <div>
+                    <div className="timeline-title">
+                      <strong>중복 발급 차단 · 사용자 {record.userId}</strong>
+                      <time>{formatDate(record.lastCheckedAt)}</time>
+                    </div>
+                    <p>이미 발급 완료된 사용자에게 중복 발급 요청이 있었습니다.</p>
+                  </div>
+                </li>
+              ) : (
                 <li key={`${record.id}:${record.issueSequence}`} className="success">
                   <span className="timeline-dot" />
                   <div>
@@ -649,7 +756,7 @@ function OperationsTab({
                       <time>{formatDate(selectedIssueCampaign.openAt)}</time>
                     </div>
                     <p>
-                      {campaignLabel(selectedIssueCampaign)} · 초기 재고 {selectedIssueCampaign.totalStock?.toLocaleString() ?? '-'}장
+                      {campaignLabel(selectedIssueCampaign)} · 쿠폰 초기 재고 {selectedIssueCampaign.totalStock?.toLocaleString() ?? '-'}장
                     </p>
                   </div>
                 </li>
@@ -658,7 +765,7 @@ function OperationsTab({
           ) : (
             <div className="empty-state small">
               <strong>표시할 상태 변경이 없습니다</strong>
-              <p>현재 캠페인의 Redis 발급 판정 승인이 발급 순번순으로 표시됩니다.</p>
+              <p>현재 쿠폰의 Redis 발급 판정 승인이 발급 순번순으로 표시됩니다.</p>
             </div>
           )}
         </article>
@@ -675,7 +782,7 @@ function OperationsTab({
           <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="issue-campaign-picker-title">
             <div className="coupon-picker-header">
               <div>
-                <span className="eyebrow">ISSUE CAMPAIGN SELECT</span>
+                <span className="eyebrow">ISSUE COUPON SELECT</span>
                 <h2 id="issue-campaign-picker-title">발급할 쿠폰 선택</h2>
                 <p>최근 생성된 발급 회차 5개 중 쿠폰을 발급할 회차를 선택하세요.</p>
               </div>
@@ -707,7 +814,7 @@ function OperationsTab({
                 ))}
               </div>
             ) : (
-              <p className="catalog-empty">선택할 발급 회차가 없습니다. 먼저 캠페인을 생성하세요.</p>
+              <p className="catalog-empty">선택할 발급 회차가 없습니다. 먼저 쿠폰을 생성하세요.</p>
             )}
             <button type="button" className="coupon-picker-cancel" onClick={() => setIssueCampaignPickerOpen(false)}>닫기</button>
           </section>

@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, getCoupons, getIssuanceStats, getRecentCouponEvents, issueCoupon } from './api/couponApi'
 import CampaignManagementTab from './tabs/CampaignManagementTab'
-import OperationsTab from './tabs/OperationsTab'
+import OperationsTab, { loadRecords } from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
-const CAMPAIGN_REFRESH_INTERVAL_MS = 30000
+
+function millisecondsUntilNextCampaignRefresh(now = new Date()) {
+  const next = new Date(now)
+  next.setMilliseconds(0)
+
+  if (now.getSeconds() < 1) {
+    next.setSeconds(1)
+  } else if (now.getSeconds() < 31) {
+    next.setSeconds(31)
+  } else {
+    next.setMinutes(now.getMinutes() + 1, 1, 0)
+  }
+
+  return Math.max(250, next.getTime() - now.getTime())
+}
 
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
@@ -36,16 +50,18 @@ const ERROR_LABELS = {
   SOLD_OUT: '재고가 모두 소진되었습니다.',
   ALREADY_ISSUED: '이미 발급받은 사용자입니다.',
   IDEMPOTENCY_CONFLICT: '멱등성 키가 다른 요청에 사용되었습니다.',
-  EVENT_NOT_OPEN: '아직 오픈하지 않은 캠페인입니다.',
-  EVENT_CLOSED: '종료된 캠페인입니다.',
-  EVENT_NOT_FOUND: '캠페인을 찾을 수 없습니다.',
+  EVENT_NOT_OPEN: '아직 오픈하지 않은 쿠폰입니다.',
+  EVENT_CLOSED: '종료된 쿠폰입니다.',
+  EVENT_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
   COUPON_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
-  EVENT_CONFIGURATION_CONFLICT: '같은 회차의 캠페인이 다른 설정으로 이미 존재합니다.',
-  CAMPAIGN_CONFIG_CONFLICT: 'Redis에 다른 설정으로 초기화된 캠페인입니다.',
-  CAMPAIGN_NOT_INITIALIZABLE: '현재 상태에서는 캠페인을 초기화할 수 없습니다.',
-  CAMPAIGN_INIT_FAILED: 'Redis 캠페인 초기화에 실패했습니다.',
+  EVENT_CONFIGURATION_CONFLICT: '같은 회차의 쿠폰이 다른 설정으로 이미 존재합니다.',
+  CAMPAIGN_CONFIG_CONFLICT: 'Redis에 다른 설정으로 초기화된 쿠폰입니다.',
+  CAMPAIGN_NOT_INITIALIZABLE: '현재 상태에서는 쿠폰을 초기화할 수 없습니다.',
+  CAMPAIGN_INIT_FAILED: 'Redis 쿠폰 초기화에 실패했습니다.',
   CAMPAIGN_INITIALIZATION_TEMPORARILY_UNAVAILABLE:
-    '캠페인은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
+    '쿠폰은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
+  CAMPAIGN_CLOSE_TEMPORARILY_UNAVAILABLE: '쿠폰을 일시적으로 마감할 수 없습니다. 잠시 후 다시 시도하세요.',
+  INVALID_STATE_TRANSITION: '현재 상태에서는 요청한 변경을 수행할 수 없습니다.',
   ISSUE_NOT_FOUND: '발급 요청을 찾을 수 없습니다.',
   ISSUE_TEMPORARILY_UNAVAILABLE: '발급 시스템을 일시적으로 사용할 수 없습니다.',
   BACKEND_UNAVAILABLE: '백엔드 서버에 연결할 수 없습니다. Spring 서버가 실행 중인지 확인하세요.',
@@ -75,7 +91,7 @@ function getSavedCouponRounds(workspace) {
 }
 
 function getSavedCampaigns(workspace) {
-  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 5)
+  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 6)
   return workspace.operationCampaign ? [workspace.operationCampaign] : []
 }
 
@@ -101,7 +117,7 @@ function normalizeCoupons(data) {
 
 function normalizeCampaigns(data) {
   if (!Array.isArray(data)) return []
-  return data.filter((campaign) => campaign?.eventId).slice(0, 5)
+  return data.filter((campaign) => campaign?.eventId).slice(0, 6)
 }
 
 function campaignLabel(campaign) {
@@ -113,6 +129,7 @@ function App() {
   const [initialWorkspace] = useState(loadWorkspace)
   const [hasSavedCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons).length > 0)
   const [notice, setNotice] = useState(null)
+  const [issueRecords, setIssueRecords] = useState(loadRecords)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
   const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
@@ -163,7 +180,7 @@ function App() {
     const parsedConcurrency = Number(concurrency)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '부하 발급 캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '부하 발급 쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedConcurrency) || parsedConcurrency < 1 || parsedConcurrency > 300) {
@@ -173,7 +190,7 @@ function App() {
     if (!selectedLoadCampaign || Number(selectedLoadCampaign.eventId) !== parsedEventId) {
       setNotice({
         tone: 'danger',
-        message: '최근 발급 회차에서 트래픽을 실행할 캠페인을 선택하세요.',
+        message: '최근 발급 회차에서 트래픽을 실행할 쿠폰을 선택하세요.',
       })
       return
     }
@@ -181,13 +198,13 @@ function App() {
     try {
       const stats = await getIssuanceStats(parsedEventId)
       if (stats.status !== 'OPEN') {
-        setNotice({ tone: 'danger', message: `OPEN 캠페인만 실행할 수 있습니다. 현재 상태: ${stats.status}` })
+        setNotice({ tone: 'danger', message: `OPEN 쿠폰만 실행할 수 있습니다. 현재 상태: ${stats.status}` })
         return
       }
       if (stats.remainingStock !== stats.totalStock) {
         setNotice({
           tone: 'danger',
-          message: `현재 잔여 재고가 ${stats.remainingStock.toLocaleString()}장입니다. 정확한 검증을 위해 새 10,000장 캠페인을 생성하세요.`,
+          message: `현재 잔여 재고가 ${stats.remainingStock.toLocaleString()}장입니다. 정확한 검증을 위해 새 10,000장 쿠폰을 생성하세요.`,
         })
         return
       }
@@ -196,7 +213,7 @@ function App() {
       setNotice({
         tone: 'danger',
         message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
-          ? 'Redis에 초기화되지 않은 캠페인입니다. 새 이벤트를 생성한 뒤 실행하세요.'
+          ? 'Redis에 초기화되지 않은 쿠폰입니다. 새 이벤트를 생성한 뒤 실행하세요.'
           : ERROR_LABELS[apiError.code] ?? apiError.message,
       })
       return
@@ -303,7 +320,7 @@ function App() {
   useEffect(() => {
     if (!notice?.toast) return undefined
 
-    const timer = window.setTimeout(() => setNotice(null), 4000)
+    const timer = window.setTimeout(() => setNotice(null), 5000)
     return () => window.clearTimeout(timer)
   }, [notice])
 
@@ -352,7 +369,10 @@ function App() {
 
     function scheduleNextRefresh() {
       if (!disposed) {
-        refreshTimer = window.setTimeout(refreshCampaigns, CAMPAIGN_REFRESH_INTERVAL_MS)
+        refreshTimer = window.setTimeout(
+          refreshCampaigns,
+          millisecondsUntilNextCampaignRefresh(),
+        )
       }
     }
 
@@ -381,8 +401,10 @@ function App() {
         ) ?? openEvents[0] ?? campaigns.find(
           (campaign) => String(campaign.eventId) === String(initialWorkspace.operationCampaign?.eventId),
         ) ?? campaigns[0]
-        setOperationCampaign(preferred)
-        setEventId((current) => openEvents.some(
+        setOperationCampaign((current) => campaigns.find(
+          (campaign) => String(campaign.eventId) === String(current?.eventId),
+        ) ?? preferred)
+        setEventId((current) => campaigns.some(
           (campaign) => String(campaign.eventId) === String(current),
         ) ? current : String(preferred.eventId))
         setLoadEventId((current) => openEvents.some(
@@ -450,15 +472,7 @@ function App() {
             onClick={() => setActiveTab('campaigns')}
           >
             <span className="nav-icon">◎</span>
-            캠페인 관리
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'loadtest' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveTab('loadtest')}
-          >
-            <span className="nav-icon">▤</span>
-            부하 테스트
+            쿠폰 관리
           </button>
           <button
             className={`nav-item ${activeTab === 'integrity' ? 'active' : ''}`}
@@ -467,6 +481,14 @@ function App() {
           >
             <span className="nav-icon">↗</span>
             정합성 리포트
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'loadtest' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('loadtest')}
+          >
+            <span className="nav-icon">▤</span>
+            테스트
           </button>
         </nav>
 
@@ -536,6 +558,7 @@ function App() {
 
         {activeTab === 'operations' && (
           <OperationsTab
+            view="monitor"
             eventId={eventId}
             setEventId={setEventId}
             recentCampaigns={recentCampaigns}
@@ -550,18 +573,88 @@ function App() {
         )}
 
         {activeTab === 'loadtest' && (
-          <LoadTestTab
-            loadEventId={loadEventId}
-            setLoadEventId={setLoadEventId}
-            openCampaigns={openCampaigns}
-            campaignLabel={campaignLabel}
-            concurrency={concurrency}
-            setConcurrency={setConcurrency}
-            loadResult={loadResult}
-            expectedStock={expectedLoadStock}
-            onSubmit={handleLoadSimulationSubmit}
-            onCancel={cancelLoadSimulation}
-          />
+          <div className="test-tab-stack">
+            <section className="test-section" aria-labelledby="load-test-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>01</span>
+                  <div>
+                    <p>LOAD VERIFICATION</p>
+                    <h2 id="load-test-section-title">부하 테스트</h2>
+                  </div>
+                </div>
+                <small>20,000명 동시 요청 · 초과 발급 검증</small>
+              </div>
+              <LoadTestTab
+                loadEventId={loadEventId}
+                setLoadEventId={setLoadEventId}
+                openCampaigns={openCampaigns}
+                campaignLabel={campaignLabel}
+                concurrency={concurrency}
+                setConcurrency={setConcurrency}
+                loadResult={loadResult}
+                expectedStock={expectedLoadStock}
+                onSubmit={handleLoadSimulationSubmit}
+                onCancel={cancelLoadSimulation}
+              />
+            </section>
+
+            <section className="test-section" aria-labelledby="issue-operation-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>02</span>
+                  <div>
+                    <p>ISSUE OPERATIONS</p>
+                    <h2 id="issue-operation-section-title">쿠폰 발급 운영</h2>
+                  </div>
+                </div>
+                <small>쿠폰 발급 · 발급 이력 · 쿠폰 상태 이력</small>
+              </div>
+              <OperationsTab
+                view="issue-operations"
+                sharedRecords={issueRecords}
+                setSharedRecords={setIssueRecords}
+                eventId={eventId}
+                setEventId={setEventId}
+                recentCampaigns={recentCampaigns}
+                openCampaigns={openCampaigns}
+                operationCampaign={operationCampaign}
+                setOperationCampaign={setOperationCampaign}
+                setNotice={setNotice}
+                campaignLabel={campaignLabel}
+                formatDate={formatDate}
+                errorLabels={ERROR_LABELS}
+              />
+            </section>
+
+            <section className="test-section" aria-labelledby="coupon-state-test-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>03</span>
+                  <div>
+                    <p>COUPON STATE VERIFICATION</p>
+                    <h2 id="coupon-state-test-section-title">쿠폰 상태 변경 테스트</h2>
+                  </div>
+                </div>
+                <small>발급 사용자별 저장 상태 확인 · 변경 테스트</small>
+              </div>
+              <OperationsTab
+                view="coupon-control"
+                sharedRecords={issueRecords}
+                setSharedRecords={setIssueRecords}
+                eventId={eventId}
+                setEventId={setEventId}
+                recentCampaigns={recentCampaigns}
+                openCampaigns={openCampaigns}
+                operationCampaign={operationCampaign}
+                setOperationCampaign={setOperationCampaign}
+                setNotice={setNotice}
+                campaignLabel={campaignLabel}
+                formatDate={formatDate}
+                errorLabels={ERROR_LABELS}
+              />
+            </section>
+          </div>
         )}
 
         {activeTab === 'integrity' && <IntegrityReportTab />}
