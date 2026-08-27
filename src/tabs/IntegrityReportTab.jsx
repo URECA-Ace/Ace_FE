@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { ApiError, verifyAllConsistency } from '../api/couponApi'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  ApiError,
+  getConsistencyChecks,
+  getConsistencyRecoveries,
+  getConsistencyRecoveryMethods,
+  getConsistencyResults,
+  recoverConsistency,
+  verifyConsistency,
+} from '../api/couponApi'
 import './IntegrityReportTab.css'
 
-const MOCK_RECOVERY_DURATION_MS = 4000
 const RECENT_RESULT_LIMIT = 8
 const RECOVERY_HISTORY_LIMIT = 10
+
+const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
 // checkName은 Ace_BE의 ConsistencyCheck 구현체 클래스명을 그대로 사용한다.
 const CHECK_LABELS = {
@@ -19,8 +28,6 @@ const CHECK_LABELS = {
   CouponExpirationLagConsistencyCheck: '쿠폰 만료 지연',
   IssueHistoryTimeSyncConsistencyCheck: '이력 시간 동기화',
 }
-
-const CHECK_NAMES = Object.keys(CHECK_LABELS)
 
 const RESULT_STATUS_META = {
   PASS: { label: '정상', tone: 'success' },
@@ -49,51 +56,6 @@ const RECOVERY_SEARCH_FIELDS = [
   { id: 'checkName', label: '검증 항목' },
   { id: 'status', label: '상태' },
 ]
-
-// 실제 복구 방법 목록은 checkName별로 백엔드가 내려줄 예정. 화면 확인용 임시 목록이다.
-const MOCK_RECOVERY_METHODS = [
-  { id: 'SYNC_FROM_MYSQL', label: 'MySQL 기준으로 강제 동기화' },
-  { id: 'SYNC_FROM_REDIS', label: 'Redis 기준으로 강제 동기화' },
-  { id: 'REPLAY_EVENT', label: '원본 이벤트 재처리' },
-]
-
-function randomFrom(list) {
-  return list[Math.floor(Math.random() * list.length)]
-}
-
-function createMockResult(status, executedAt = new Date()) {
-  const checkName = randomFrom(CHECK_NAMES)
-  const eventId = 1000 + Math.floor(Math.random() * 200)
-  const violationCount = status === 'FAIL' ? Math.floor(Math.random() * 5) + 1 : 0
-
-  return {
-    id: crypto.randomUUID(),
-    checkName,
-    status,
-    scopeType: randomFrom(['EVENT', 'AS_OF_RANGE', 'ALL']),
-    eventId,
-    violationCount,
-    diffDetail: status === 'FAIL'
-      ? { eventId, expected: 10000, actual: 10000 + violationCount }
-      : null,
-    errorMessage: status === 'ERROR' ? 'ConsistencyCheckException: CHECK_POSTPONED' : null,
-    executedAt: executedAt.toISOString(),
-    durationMillis: Math.floor(Math.random() * 900) + 80,
-    recoveryStatus: status === 'FAIL' ? 'NONE' : null,
-  }
-}
-
-function createInitialResults() {
-  const now = Date.now()
-  return [
-    createMockResult('FAIL', new Date(now - 30_000)),
-    createMockResult('ERROR', new Date(now - 90_000)),
-    createMockResult('PASS', new Date(now - 150_000)),
-    createMockResult('PASS', new Date(now - 210_000)),
-    createMockResult('FAIL', new Date(now - 300_000)),
-    createMockResult('PASS', new Date(now - 360_000)),
-  ]
-}
 
 function formatDate(value) {
   if (!value) return '-'
@@ -184,11 +146,22 @@ function FieldSearch({ fields, activeField, onFieldChange, value, onValueChange,
 }
 
 function IntegrityReportTab() {
-  const [results, setResults] = useState(createInitialResults)
+  const [results, setResults] = useState([])
   const [selectedMethodByResult, setSelectedMethodByResult] = useState({})
   const [recoveryHistory, setRecoveryHistory] = useState([])
+  const [recoveryMethodsByResult, setRecoveryMethodsByResult] = useState({})
+  const [recoveringResultId, setRecoveringResultId] = useState(null)
+  const [reportLoading, setReportLoading] = useState(true)
   const [detailResult, setDetailResult] = useState(null)
-  const [verifyingAll, setVerifyingAll] = useState(false)
+  const [scopeCatalogs, setScopeCatalogs] = useState({})
+  const [selectedScope, setSelectedScope] = useState('EVENT')
+  const [selectedChecks, setSelectedChecks] = useState([])
+  const [eventId, setEventId] = useState('')
+  const [rangeFrom, setRangeFrom] = useState('')
+  const [rangeTo, setRangeTo] = useState('')
+  const [launcherOpen, setLauncherOpen] = useState(true)
+  const [loadingChecks, setLoadingChecks] = useState(true)
+  const [verifying, setVerifying] = useState(false)
   const [verificationNotice, setVerificationNotice] = useState(null)
   const [recentSearchField, setRecentSearchField] = useState('checkName')
   const [recentSearchText, setRecentSearchText] = useState('')
@@ -198,75 +171,167 @@ function IntegrityReportTab() {
   const [failSearchText, setFailSearchText] = useState('')
   const [recoverySearchField, setRecoverySearchField] = useState('checkName')
   const [recoverySearchText, setRecoverySearchText] = useState('')
-  const recoveryTimersRef = useRef({})
 
-  async function verifyAll() {
-    setVerifyingAll(true)
+  const refreshReportData = useCallback(async (signal) => {
+    setReportLoading(true)
+    try {
+      const [recentPage, errorPage, failPage, recoveryPage] = await Promise.all([
+        getConsistencyResults({ page: 0, size: RECENT_RESULT_LIMIT }, signal),
+        getConsistencyResults({ status: 'ERROR', page: 0, size: RECENT_RESULT_LIMIT }, signal),
+        getConsistencyResults({ status: 'FAIL', page: 0, size: RECENT_RESULT_LIMIT }, signal),
+        getConsistencyRecoveries(0, 100, signal),
+      ])
+      const history = recoveryPage.content.map((entry) => ({
+        ...entry,
+        methodLabel: entry.actionLabel,
+        requestedAt: entry.createdAt,
+        finishedAt: entry.createdAt,
+      }))
+      const latestRecoveryByResult = new Map()
+      history.forEach((entry) => {
+        if (!latestRecoveryByResult.has(entry.verificationResultId)) {
+          latestRecoveryByResult.set(entry.verificationResultId, entry.status)
+        }
+      })
+      const resultById = new Map(
+        [...recentPage.content, ...errorPage.content, ...failPage.content]
+          .map((result) => [result.id, result]),
+      )
+      const normalizedResults = [...resultById.values()]
+        .sort((left, right) => new Date(right.executedAt) - new Date(left.executedAt))
+        .map((result) => ({
+        ...result,
+        recoveryStatus: result.status === 'FAIL'
+          ? (latestRecoveryByResult.get(result.id) ?? 'NONE')
+          : null,
+        }))
+      setResults(normalizedResults)
+      setRecoveryHistory(history.slice(0, RECOVERY_HISTORY_LIMIT))
+
+      const failedResults = normalizedResults.filter((result) => result.status === 'FAIL')
+      const methodEntries = await Promise.all(failedResults.map(async (result) => [
+        result.id,
+        await getConsistencyRecoveryMethods(result.id, signal),
+      ]))
+      setRecoveryMethodsByResult(Object.fromEntries(methodEntries))
+    } finally {
+      if (!signal?.aborted) setReportLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadTabData() {
+      setLoadingChecks(true)
+      try {
+        const [catalogs] = await Promise.all([
+          Promise.all(SCOPE_TYPES.map(
+            (scopeType) => getConsistencyChecks(scopeType, controller.signal),
+          )),
+          refreshReportData(controller.signal),
+        ])
+        setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
+      } catch (error) {
+        if (error.name === 'AbortError') return
+        const message = error instanceof ApiError
+          ? error.message
+          : '검사 목록을 불러오지 못했습니다.'
+        setVerificationNotice({ tone: 'danger', message })
+      } finally {
+        if (!controller.signal.aborted) setLoadingChecks(false)
+      }
+    }
+
+    loadTabData()
+    return () => controller.abort()
+  }, [refreshReportData])
+
+  function selectScope(scopeType) {
+    setSelectedScope(scopeType)
+    setSelectedChecks([])
+    setVerificationNotice(null)
+  }
+
+  function toggleCheck(checkName) {
+    setSelectedChecks((current) => current.includes(checkName)
+      ? current.filter((name) => name !== checkName)
+      : [...current, checkName])
+  }
+
+  function buildScopePayload() {
+    if (selectedScope === 'EVENT') return { type: 'EVENT', eventId: Number(eventId) }
+    if (selectedScope === 'AS_OF_RANGE') {
+      return { type: 'AS_OF_RANGE', from: rangeFrom, to: rangeTo }
+    }
+    return { type: 'ALL' }
+  }
+
+  function validateVerificationRequest() {
+    if (selectedChecks.length === 0) return '실행할 검사를 한 개 이상 선택해주세요.'
+    if (selectedScope === 'EVENT' && (!eventId || Number(eventId) <= 0)) {
+      return '검증할 이벤트 ID를 입력해주세요.'
+    }
+    if (selectedScope === 'AS_OF_RANGE' && (!rangeFrom || !rangeTo)) {
+      return '검증 기간의 시작과 종료 시각을 모두 입력해주세요.'
+    }
+    if (selectedScope === 'AS_OF_RANGE' && rangeFrom >= rangeTo) {
+      return '시작 시각은 종료 시각보다 이전이어야 합니다.'
+    }
+    return null
+  }
+
+  async function runVerification() {
+    const validationMessage = validateVerificationRequest()
+    if (validationMessage) {
+      setVerificationNotice({ tone: 'danger', message: validationMessage })
+      return
+    }
+
+    setVerifying(true)
     setVerificationNotice(null)
 
     try {
-      const jobExecutionId = await verifyAllConsistency()
-      setVerificationNotice({
-        tone: 'success',
-        message: `전체 검사 요청이 접수되었습니다. 작업 ID: ${jobExecutionId}`,
+      const response = await verifyConsistency({
+        scope: buildScopePayload(),
+        checkNames: selectedChecks,
       })
+
+      if (response.executionType === 'ASYNC') {
+        setVerificationNotice({
+          tone: 'success',
+          message: `전체 데이터 검증이 접수되었습니다. 작업 ID: ${response.jobExecutionId}`,
+        })
+      } else {
+        await refreshReportData()
+        setVerificationNotice({
+          tone: 'success',
+          message: `선택한 검사 ${response.results.length}건을 완료했습니다.`,
+        })
+      }
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
-        : '전체 검사 요청 중 알 수 없는 오류가 발생했습니다.'
+        : '정합성 검사 요청 중 알 수 없는 오류가 발생했습니다.'
       setVerificationNotice({ tone: 'danger', message })
     } finally {
-      setVerifyingAll(false)
+      setVerifying(false)
     }
   }
 
-  useEffect(() => () => {
-    Object.values(recoveryTimersRef.current).forEach(window.clearTimeout)
-  }, [])
-
-  function startRecovery(resultId) {
+  async function startRecovery(resultId) {
     const methodId = selectedMethodByResult[resultId]
     if (!methodId) return
-
-    const target = results.find((item) => item.id === resultId)
-    const method = MOCK_RECOVERY_METHODS.find((item) => item.id === methodId)
-    const attemptId = crypto.randomUUID()
-
-    setResults((current) =>
-      current.map((item) =>
-        item.id === resultId ? { ...item, recoveryStatus: 'IN_PROGRESS' } : item,
-      ),
-    )
-    setRecoveryHistory((current) => [
-      {
-        id: attemptId,
-        checkName: target?.checkName,
-        methodLabel: method?.label ?? methodId,
-        status: 'IN_PROGRESS',
-        requestedAt: new Date().toISOString(),
-        finishedAt: null,
-      },
-      ...current,
-    ].slice(0, RECOVERY_HISTORY_LIMIT))
-
-    // TODO: 백엔드 복구 실행 API 연동 시 recovery_status 폴링으로 교체한다.
-    const timer = window.setTimeout(() => {
-      const succeeded = Math.random() < 0.7
-      const finishedAt = new Date().toISOString()
-      setResults((current) =>
-        current.map((item) =>
-          item.id === resultId ? { ...item, recoveryStatus: succeeded ? 'SUCCESS' : 'FAIL' } : item,
-        ),
-      )
-      setRecoveryHistory((current) =>
-        current.map((item) =>
-          item.id === attemptId ? { ...item, status: succeeded ? 'SUCCESS' : 'FAIL', finishedAt } : item,
-        ),
-      )
-      delete recoveryTimersRef.current[resultId]
-    }, MOCK_RECOVERY_DURATION_MS)
-
-    recoveryTimersRef.current[resultId] = timer
+    setRecoveringResultId(resultId)
+    try {
+      await recoverConsistency(resultId, methodId)
+      await refreshReportData()
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : '복구 실행에 실패했습니다.'
+      setVerificationNotice({ tone: 'danger', message })
+    } finally {
+      setRecoveringResultId(null)
+    }
   }
 
   const recentResults = filterResults(results, recentSearchField, recentSearchText).slice(0, RECENT_RESULT_LIMIT)
@@ -281,6 +346,7 @@ function IntegrityReportTab() {
     failSearchText,
   ).slice(0, RECENT_RESULT_LIMIT)
   const filteredRecoveryHistory = filterRecoveryHistory(recoveryHistory, recoverySearchField, recoverySearchText)
+  const selectedCatalog = scopeCatalogs[selectedScope]
 
   return (
     <section className="reconciliation-report" aria-labelledby="reconciliation-title">
@@ -290,15 +356,129 @@ function IntegrityReportTab() {
           <h2 id="reconciliation-title">데이터 정합성 리포트</h2>
           <p>최근 검증 결과를 확인하고, 실패한 항목은 복구 방법을 선택해 복구를 진행합니다.</p>
         </div>
-        <div className="consistency-heading-actions">
-          <span className="api-chip">POST · /internal/consistency/verify</span>
+        <span className="api-chip">POST · /api/v1/consistency/verifications</span>
+      </div>
+
+      <section className="panel consistency-launcher" aria-labelledby="consistency-launcher-title">
+        <div className="consistency-launcher-heading">
+          <div>
+            <span className="section-number">00</span>
+            <h2 id="consistency-launcher-title">정합성 검증 실행</h2>
+            <button
+              type="button"
+              className="launcher-collapse-button"
+              aria-expanded={launcherOpen}
+              aria-controls="consistency-launcher-body"
+              onClick={() => setLauncherOpen((current) => !current)}
+            >
+              {launcherOpen ? '접기' : '펼치기'}
+              <span aria-hidden="true" className={launcherOpen ? 'open' : ''}>⌄</span>
+            </button>
+          </div>
+          <span className="consistency-launcher-summary">
+            {scopeCatalogs[selectedScope]?.scope.label ?? selectedScope} · {selectedChecks.length}개 선택
+          </span>
+        </div>
+
+        {launcherOpen && (
+        <div id="consistency-launcher-body" className="consistency-launcher-body">
+        <div className="scope-toggle-group" role="group" aria-label="검증 범위 선택">
+          {SCOPE_TYPES.map((scopeType) => (
+            <button
+              key={scopeType}
+              type="button"
+              className={`scope-toggle ${selectedScope === scopeType ? 'active' : ''}`}
+              aria-pressed={selectedScope === scopeType}
+              onClick={() => selectScope(scopeType)}
+              disabled={loadingChecks || verifying}
+            >
+              <strong>{scopeCatalogs[scopeType]?.scope.label ?? scopeType}</strong>
+              <span>{scopeType}</span>
+            </button>
+          ))}
+        </div>
+
+        {selectedScope === 'EVENT' && (
+          <label className="verification-scope-field">
+            <span>이벤트 ID</span>
+            <input
+              type="number"
+              min="1"
+              value={eventId}
+              onChange={(event) => setEventId(event.target.value)}
+              placeholder="예: 123"
+              disabled={verifying}
+            />
+          </label>
+        )}
+
+        {selectedScope === 'AS_OF_RANGE' && (
+          <div className="range-field-group">
+            <label className="verification-scope-field">
+              <span>시작 시각</span>
+              <input
+                type="datetime-local"
+                value={rangeFrom}
+                onChange={(event) => setRangeFrom(event.target.value)}
+                disabled={verifying}
+              />
+            </label>
+            <span className="range-separator">부터</span>
+            <label className="verification-scope-field">
+              <span>종료 시각</span>
+              <input
+                type="datetime-local"
+                value={rangeTo}
+                onChange={(event) => setRangeTo(event.target.value)}
+                disabled={verifying}
+              />
+            </label>
+            <span className="range-separator">미만</span>
+          </div>
+        )}
+
+        <div className="check-selector">
+          <div className="check-selector-heading">
+            <strong>실행할 검사</strong>
+            <span>{selectedChecks.length}개 선택</span>
+          </div>
+          {loadingChecks ? (
+            <p className="catalog-empty">검사 목록을 불러오는 중입니다.</p>
+          ) : selectedCatalog?.checks.length > 0 ? (
+            <div className="check-toggle-grid">
+              {selectedCatalog.checks.map((check) => {
+                const selected = selectedChecks.includes(check.name)
+                return (
+                  <button
+                    key={check.name}
+                    type="button"
+                    className={`check-toggle ${selected ? 'active' : ''}`}
+                    aria-pressed={selected}
+                    onClick={() => toggleCheck(check.name)}
+                    disabled={verifying}
+                  >
+                    <span className="check-toggle-indicator" aria-hidden="true">{selected ? '✓' : '+'}</span>
+                    <span>
+                      <strong>{check.label}</strong>
+                      <small>{check.name}</small>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="catalog-empty">이 범위에서 실행할 수 있는 검사가 없습니다.</p>
+          )}
+        </div>
+
+        <div className="consistency-launcher-footer">
           <button
             type="button"
             className="primary-button consistency-verify-button"
-            onClick={verifyAll}
-            disabled={verifyingAll}
+            onClick={runVerification}
+            disabled={loadingChecks || verifying || !selectedCatalog}
           >
-            {verifyingAll ? '전체 검사 요청 중…' : '전체 검사 실행'}
+            {verifying ? '검증 실행 중…' : `선택한 검사 실행 (${selectedChecks.length})`}
           </button>
           {verificationNotice && (
             <p
@@ -310,7 +490,9 @@ function IntegrityReportTab() {
             </p>
           )}
         </div>
-      </div>
+        </div>
+        )}
+      </section>
 
       <section className="panel recent-results-panel" aria-labelledby="recent-results-title">
         <div className="panel-heading">
@@ -360,7 +542,9 @@ function IntegrityReportTab() {
             </tbody>
           </table>
         </div>
-        <p className="data-note">API 연동 전까지는 화면 확인용 예시 데이터입니다.</p>
+        <p className="data-note">
+          {reportLoading ? '최신 검증 결과를 불러오는 중입니다.' : `검증 결과 ${results.length}건을 조회했습니다.`}
+        </p>
       </section>
 
       <div className="reconciliation-columns">
@@ -425,8 +609,9 @@ function IntegrityReportTab() {
           <ul className="verification-fail-list">
             {failResults.map((result) => {
               const recoveryMeta = RECOVERY_STATUS_META[result.recoveryStatus] ?? RECOVERY_STATUS_META.NONE
-              const recovering = result.recoveryStatus === 'IN_PROGRESS'
+              const recovering = recoveringResultId === result.id
               const locked = recovering || result.recoveryStatus === 'SUCCESS'
+              const recoveryMethods = recoveryMethodsByResult[result.id] ?? []
               return (
                 <li key={result.id} className="fail-item">
                   <div className="fail-item-heading">
@@ -455,9 +640,11 @@ function IntegrityReportTab() {
                       }
                       disabled={locked}
                     >
-                      <option value="">복구 방법 선택</option>
-                      {MOCK_RECOVERY_METHODS.map((method) => (
-                        <option key={method.id} value={method.id}>{method.label}</option>
+                      <option value="">
+                        {recoveryMethods.length > 0 ? '복구 방법 선택' : '지원하는 복구 방법 없음'}
+                      </option>
+                      {recoveryMethods.map((method) => (
+                        <option key={method.action} value={method.action}>{method.label}</option>
                       ))}
                     </select>
                     <button
