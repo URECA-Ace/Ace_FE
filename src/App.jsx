@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, getCoupons, getIssuanceStats, getRecentCouponEvents, issueCoupon } from './api/couponApi'
 import CampaignManagementTab from './tabs/CampaignManagementTab'
-import OperationsTab from './tabs/OperationsTab'
+import OperationsTab, { loadRecords } from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
 import './App.css'
@@ -129,6 +129,7 @@ function App() {
   const [initialWorkspace] = useState(loadWorkspace)
   const [hasSavedCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons).length > 0)
   const [notice, setNotice] = useState(null)
+  const [issueRecords, setIssueRecords] = useState(loadRecords)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
   const [selectedCouponId, setSelectedCouponId] = useState(() => String(initialWorkspace.selectedCouponId ?? ''))
@@ -611,6 +612,8 @@ function App() {
               </div>
               <OperationsTab
                 view="issue-operations"
+                sharedRecords={issueRecords}
+                setSharedRecords={setIssueRecords}
                 eventId={eventId}
                 setEventId={setEventId}
                 recentCampaigns={recentCampaigns}
@@ -637,6 +640,8 @@ function App() {
               </div>
               <OperationsTab
                 view="coupon-control"
+                sharedRecords={issueRecords}
+                setSharedRecords={setIssueRecords}
                 eventId={eventId}
                 setEventId={setEventId}
                 recentCampaigns={recentCampaigns}

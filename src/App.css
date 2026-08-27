@@ -2063,6 +2063,213 @@ h2 {
   opacity: 0.65;
 }
 
+.user-control-layout {
+  display: grid;
+  grid-template-columns: minmax(245px, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.user-directory,
+.user-detail-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #ebe6ed;
+  border-radius: 13px;
+  background: #fcfbfd;
+}
+
+.user-directory-heading,
+.user-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.user-directory-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.user-directory-heading span,
+.user-detail-kicker {
+  color: var(--magenta);
+  font: 800 8px/1 Manrope, sans-serif;
+  letter-spacing: 1.1px;
+}
+
+.user-directory-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.user-directory-heading > small {
+  padding-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.user-search-field {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.user-search-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #ddd7e1;
+  border-radius: 9px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 11px;
+}
+
+.user-search-field input:focus {
+  border-color: rgba(230, 0, 126, 0.52);
+  box-shadow: 0 0 0 4px rgba(230, 0, 126, 0.07);
+  outline: 0;
+}
+
+.user-tabs {
+  display: grid;
+  height: 560px;
+  max-height: 560px;
+  gap: 7px;
+  padding: 2px 5px 2px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
+.user-tabs button {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #e8e2ea;
+  border-radius: 10px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.user-tabs button:hover {
+  border-color: rgba(230, 0, 126, 0.28);
+  background: #fff9fc;
+  transform: translateX(2px);
+}
+
+.user-tabs button.selected {
+  border-color: rgba(230, 0, 126, 0.42);
+  background: #fff2f8;
+  box-shadow: inset 3px 0 0 var(--magenta);
+}
+
+.user-list-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid !important;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(140deg, var(--magenta), var(--purple));
+  font: 800 10px/1 Manrope, sans-serif !important;
+  opacity: 1 !important;
+}
+
+.user-list-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.user-list-copy strong,
+.user-list-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-list-copy strong {
+  font-size: 11px;
+}
+
+.user-list-copy small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+  opacity: 1;
+}
+
+.user-tabs .status-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.user-search-empty {
+  padding: 28px 12px;
+  color: var(--muted);
+  border: 1px dashed #ddd5df;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 10px;
+  text-align: center;
+}
+
+.user-detail-panel {
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  align-self: center;
+}
+
+.user-detail-heading {
+  align-items: center;
+  min-height: 88px;
+  padding-block: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f0edf1;
+}
+
+.user-detail-heading .user-identity {
+  min-width: 0;
+}
+
+.user-detail-heading .user-identity > div {
+  min-width: 0;
+}
+
+.user-detail-heading .user-identity strong,
+.user-detail-heading .user-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-detail-kicker {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.user-detail-panel > .ghost-button {
+  margin-top: 13px;
+}
+
+.user-detail-panel .issue-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .user-summary {
   padding: 14px 0;
   border-top: 1px solid #f0edf1;
@@ -2291,7 +2498,7 @@ h2 {
 }
 
 .history-table-wrap {
-  max-height: 840px;
+  max-height: 480px;
   overflow: auto;
 }
 
@@ -2389,7 +2596,7 @@ tbody tr:hover {
 }
 
 .timeline {
-  max-height: 840px;
+  max-height: 480px;
   margin: 0;
   padding: 0 2px 0 8px;
   list-style: none;
@@ -2579,6 +2786,15 @@ tbody tr:hover {
 
   .panel {
     padding: 18px;
+  }
+
+  .user-control-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .user-tabs {
+    height: 560px;
+    max-height: 560px;
   }
 
   .catalog-heading {

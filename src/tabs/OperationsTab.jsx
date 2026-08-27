@@ -18,7 +18,7 @@ const STATUS_META = {
   REQUEST_FAILED: { label: '요청 실패', tone: 'danger' },
 }
 
-function loadRecords() {
+export function loadRecords() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     return stored ? JSON.parse(stored) : []
@@ -66,6 +66,8 @@ function mergeStatus(record, data, source = 'POLL') {
 
 function OperationsTab({
   view = 'operations',
+  sharedRecords,
+  setSharedRecords,
   eventId,
   setEventId,
   recentCampaigns,
@@ -77,12 +79,15 @@ function OperationsTab({
   formatDate,
   errorLabels,
 }) {
-  const [records, setRecords] = useState(loadRecords)
+  const [localRecords, setLocalRecords] = useState(loadRecords)
+  const records = sharedRecords ?? localRecords
+  const updateRecords = setSharedRecords ?? setLocalRecords
   const [selectedId, setSelectedId] = useState(() => loadRecords()[0]?.id ?? null)
   const [userId, setUserId] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [issueCampaignPickerOpen, setIssueCampaignPickerOpen] = useState(false)
   const [historyScope, setHistoryScope] = useState('current')
+  const [userSearch, setUserSearch] = useState('')
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedIssueCampaign = recentCampaigns.find(
@@ -116,6 +121,13 @@ function OperationsTab({
       round: record.campaignRound ?? campaign?.round,
     })
   }
+
+  const visibleUserRecords = userSearch.trim()
+    ? records.filter((record) => (
+        String(record.userId).includes(userSearch.trim())
+        || recordCampaignLabel(record, recentCampaigns).toLowerCase().includes(userSearch.trim().toLowerCase())
+      ))
+    : records
 
   useEffect(() => {
     if (!issueCampaignPickerOpen) return undefined
@@ -153,7 +165,7 @@ function OperationsTab({
           selectedPendingRequestId,
           controller.signal,
         )
-        setRecords((current) =>
+        updateRecords((current) =>
           current.map((item) =>
             item.id === selectedPendingId ? mergeStatus(item, data) : item,
           ),
@@ -171,7 +183,7 @@ function OperationsTab({
       window.clearInterval(timer)
       controller.abort()
     }
-  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId])
+  }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId, updateRecords])
 
   const summary = useMemo(() => {
     const accepted = records.filter((record) =>
@@ -244,7 +256,7 @@ function OperationsTab({
     setSubmitting(true)
     setNotice(null)
     setSelectedId(recordId)
-    setRecords((current) => {
+    updateRecords((current) => {
       const previous = current.find((record) => record.id === recordId)
       const next = {
         id: recordId,
@@ -267,7 +279,7 @@ function OperationsTab({
 
     try {
       const data = await issueCoupon(parsedEventId, parsedUserId, idempotencyKey)
-      setRecords((current) =>
+      updateRecords((current) =>
         current.map((record) =>
           record.id === recordId
             ? {
@@ -293,7 +305,7 @@ function OperationsTab({
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       const message = errorLabels[apiError.code] ?? apiError.message
-      setRecords((current) =>
+      updateRecords((current) =>
         current.map((record) =>
           record.id === recordId
             ? {
@@ -320,7 +332,7 @@ function OperationsTab({
     setNotice(null)
     try {
       const data = await getIssueStatus(selected.eventId, selected.requestId)
-      setRecords((current) =>
+      updateRecords((current) =>
         current.map((record) =>
           record.id === selected.id ? mergeStatus(record, data, 'REFRESH') : record,
         ),
@@ -336,7 +348,7 @@ function OperationsTab({
   }
 
   function clearRecords() {
-    setRecords([])
+    updateRecords([])
     setSelectedId(null)
     setNotice({ tone: 'neutral', message: '브라우저에 저장된 시연 기록을 비웠습니다.' })
   }
@@ -355,41 +367,75 @@ function OperationsTab({
 
       {records.length > 0 ? (
         <>
-          <div className="user-tabs" role="tablist" aria-label="발급 사용자">
-            {records.map((record) => (
-              <button
-                key={record.id}
-                type="button"
-                role="tab"
-                aria-selected={record.id === selected?.id}
-                className={record.id === selected?.id ? 'selected' : ''}
-                onClick={() => setSelectedId(record.id)}
-              >
-                <span>U{record.userId}</span>
-                <small>{recordCampaignLabel(record, recentCampaigns)}</small>
-              </button>
-            ))}
-          </div>
-
-          <div className="user-summary">
-            <div className="user-identity">
-              <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
-              <div>
-                <strong>사용자 #{selected.userId}</strong>
-                <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+          <div className="user-control-layout">
+            <section className="user-directory" aria-labelledby="recent-user-list-title">
+              <div className="user-directory-heading">
+                <div>
+                  <span>RECENT ISSUANCE</span>
+                  <h3 id="recent-user-list-title">최근 발급 사용자</h3>
+                </div>
+                <small>{userSearch.trim() ? `${visibleUserRecords.length}명 검색됨` : `전체 ${records.length}명 · 최신순`}</small>
               </div>
-            </div>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={refreshSelected}
-              disabled={!selected.requestId}
-            >
-              상태 새로고침
-            </button>
-          </div>
+              <label className="user-search-field" htmlFor="coupon-user-search">
+                사용자 검색
+                <input
+                  id="coupon-user-search"
+                  type="search"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                  placeholder="사용자 ID 또는 발급 회차"
+                />
+              </label>
+              {visibleUserRecords.length > 0 ? (
+                <div className="user-tabs" role="list" aria-label="발급 사용자 목록">
+                  {visibleUserRecords.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      role="listitem"
+                      aria-pressed={record.id === selected?.id}
+                      className={record.id === selected?.id ? 'selected' : ''}
+                      onClick={() => setSelectedId(record.id)}
+                    >
+                      <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
+                      <span className="user-list-copy">
+                        <strong>사용자 #{record.userId}</strong>
+                        <small>{recordCampaignLabel(record, recentCampaigns)}</small>
+                      </span>
+                      <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
+                        {statusMeta(record.status).label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="user-search-empty">검색 결과가 없습니다.</div>
+              )}
+            </section>
 
-          <dl className="issue-detail-grid">
+            {visibleUserRecords.length > 0 && selected && (
+              <aside className="user-detail-panel" aria-labelledby="selected-user-title">
+                <div className="user-detail-heading">
+                  <div className="user-identity">
+                    <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
+                    <div>
+                      <span className="user-detail-kicker">SELECTED USER</span>
+                      <strong id="selected-user-title">사용자 #{selected.userId}</strong>
+                      <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+                    </div>
+                  </div>
+                  <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={refreshSelected}
+                  disabled={!selected.requestId}
+                >
+                  상태 새로고침
+                </button>
+
+                <dl className="issue-detail-grid">
             <div>
               <dt>발급 순번</dt>
               <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
@@ -437,6 +483,9 @@ function OperationsTab({
               </button>
             )}
           </div>
+              </aside>
+            )}
+            </div>
         </>
       ) : (
         <div className="empty-state">
