@@ -1226,7 +1226,7 @@ h1 {
 }
 
 .monitor-header {
-  padding: 24px 27px;
+  padding: 28px 31px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1247,13 +1247,13 @@ h1 {
 
 .monitor-header h2 {
   margin-bottom: 7px;
-  font-size: 19px;
+  font-size: 21px;
 }
 
 .monitor-header p {
   margin-bottom: 0;
   color: #847c87;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .monitor-form {
@@ -1316,7 +1316,7 @@ h1 {
 }
 
 .monitor-body {
-  padding: 20px 24px;
+  padding: 24px 28px;
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   gap: 12px;
@@ -1326,8 +1326,8 @@ h1 {
 .campaign-state-card,
 .inventory-watch {
   min-width: 0;
-  min-height: 178px;
-  padding: 16px;
+  min-height: 196px;
+  padding: 19px;
   border: 1px solid #eae5ec;
   border-radius: 13px;
   background: #fff;
@@ -1379,7 +1379,7 @@ h1 {
 
 .campaign-state-heading strong {
   color: #3b333d;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .state-live-dot {
@@ -1425,9 +1425,9 @@ h1 {
 }
 
 .campaign-state-card > p {
-  margin: 16px 0;
+  margin: 18px 0;
   color: #7f7782;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.55;
 }
 
@@ -1491,13 +1491,13 @@ h1 {
 .inventory-heading span {
   margin-bottom: 9px;
   color: #8d8590;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
 }
 
 .inventory-heading strong {
   color: #39313b;
-  font: 800 23px/1 Manrope, sans-serif;
+  font: 800 26px/1 Manrope, sans-serif;
   letter-spacing: -0.8px;
 }
 
@@ -1540,7 +1540,7 @@ h1 {
 }
 
 .issuance-log-panel {
-  margin: 0 24px 20px;
+  margin: 0 28px 24px;
   border: 1px solid #e6e1e8;
   border-radius: 13px;
   background: #fff;
@@ -1548,7 +1548,7 @@ h1 {
 }
 
 .issuance-log-header {
-  padding: 16px 18px;
+  padding: 20px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1567,13 +1567,13 @@ h1 {
 .issuance-log-header h3 {
   margin: 0 0 4px;
   color: #39313b;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .issuance-log-header p {
   margin: 0;
   color: #938b96;
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .issuance-log-summary {
@@ -1605,23 +1605,23 @@ h1 {
 .issuance-log-columns,
 .issuance-log-list li {
   display: grid;
-  grid-template-columns: 78px 72px 84px minmax(150px, 1.3fr) 116px 82px 104px;
+  grid-template-columns: 42px 96px 120px minmax(170px, 1.5fr) minmax(150px, 1.2fr) 100px minmax(140px, 1.1fr);
   align-items: center;
-  column-gap: 10px;
-  min-width: 800px;
+  column-gap: 12px;
+  min-width: 820px;
 }
 
 .issuance-log-columns {
-  height: 28px;
-  padding: 0 18px;
+  height: 34px;
+  padding: 0 22px;
   color: #9d96a0;
   background: #f8f6f9;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
 }
 
 .issuance-log-list {
-  --issuance-log-row-height: 34px;
+  --issuance-log-row-height: 42px;
   max-height: calc(var(--issuance-log-row-height) * 20);
   margin: 0;
   padding: 0;
@@ -1634,10 +1634,10 @@ h1 {
 
 .issuance-log-list li {
   height: var(--issuance-log-row-height);
-  padding: 0 18px;
+  padding: 0 22px;
   border-bottom: 1px solid #f1eef2;
   color: #625a65;
-  font: 700 8px/1 Manrope, sans-serif;
+  font: 700 9px/1 Manrope, sans-serif;
   animation: issuance-log-enter 180ms ease-out;
 }
 
@@ -1647,7 +1647,7 @@ h1 {
 
 .issuance-log-list li strong {
   color: var(--magenta-dark);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .issuance-log-list li > span {
@@ -1657,13 +1657,8 @@ h1 {
   white-space: nowrap;
 }
 
-.issuance-log-list li .issuance-log-user-id {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.issuance-log-list li i {
+.issuance-log-status-dot {
+  justify-self: center;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -1673,7 +1668,10 @@ h1 {
 
 .issuance-log-list li time {
   color: #8f8792;
-  text-align: right;
+}
+
+.issuance-log-time {
+  text-align: center;
 }
 
 .issuance-log-list li em {

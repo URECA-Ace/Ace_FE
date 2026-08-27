@@ -350,13 +350,13 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
         {issuanceLogs.length > 0 ? (
           <div className="issuance-log-table">
             <div className="issuance-log-columns" aria-hidden="true">
+              <span />
               <span>발급 순번</span>
-              <span>사용자 ID</span>
               <span>이름</span>
               <span>이메일</span>
               <span>휴대폰 번호</span>
               <span>상태</span>
-              <span>DB 확정 시각</span>
+              <span className="issuance-log-time">DB 확정 시각</span>
             </div>
             <ol
               className="issuance-log-list"
@@ -367,11 +367,8 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
                 const logStatus = issueStatusMeta(log.status)
                 return (
                   <li key={log.issueSequence}>
+                    <span className="issuance-log-status-dot" title={logStatus.label} aria-label={logStatus.label} />
                     <strong>#{log.issueSequence.toLocaleString()}</strong>
-                    <span className="issuance-log-user-id">
-                      <i aria-hidden="true" />
-                      {log.userId.toLocaleString()}
-                    </span>
                     <span title={log.maskedUserName}>{log.maskedUserName || '-'}</span>
                     <span title={log.maskedUserEmail}>{log.maskedUserEmail || '-'}</span>
                     <span title={log.maskedUserPhone}>{log.maskedUserPhone || '-'}</span>
@@ -380,7 +377,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
                         {logStatus.label}
                       </em>
                     </span>
-                    <time dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
+                    <time className="issuance-log-time" dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
                   </li>
                 )
               })}
