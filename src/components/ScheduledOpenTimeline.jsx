@@ -47,9 +47,12 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
                         <dd>{STATUS_LABELS[campaign.status] ?? campaign.status}</dd>
                       </div>
                       <div className="campaign-close-cell">
-                        <dt>마감</dt>
                         {campaign.status === 'OPEN' ? (
-                          <dd>
+                          <>
+                            <div className="campaign-close-schedule">
+                              <dt>예약 마감 시각</dt>
+                              <dd>{formatDate(campaign.closeAt)}</dd>
+                            </div>
                             <button
                               type="button"
                               className="campaign-close-button"
@@ -58,11 +61,14 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
                             >
                               {String(closingEventId) === String(campaign.eventId) ? '마감 중…' : '마감'}
                             </button>
-                          </dd>
+                          </>
                         ) : (
-                          <dd className="campaign-closed-copy">
-                            {campaign.status === 'SOLD_OUT' ? '재고 소진으로 발급 종료' : '수동 마감 완료'}
-                          </dd>
+                          <div>
+                            <dt>마감 결과</dt>
+                            <dd className="campaign-closed-copy">
+                              {campaign.status === 'SOLD_OUT' ? '재고 소진으로 발급 종료' : '마감 완료'}
+                            </dd>
+                          </div>
                         )}
                       </div>
                     </>
@@ -81,7 +87,7 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
       )}
 
       <p className="schedule-note">
-        수동 마감은 Redis 발급 판정을 먼저 차단한 뒤 서버의 캠페인 상태를 CLOSED로 전환합니다.
+        예약 마감 시각에는 자동으로 CLOSED 상태로 전환되며, 그 전에도 마감 버튼으로 발급을 종료할 수 있습니다.
       </p>
     </section>
   )

@@ -7,7 +7,7 @@ import IntegrityReportTab from './tabs/IntegrityReportTab'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
-const CAMPAIGN_REFRESH_INTERVAL_MS = 30000
+const CAMPAIGN_REFRESH_INTERVAL_MS = 1000
 
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128

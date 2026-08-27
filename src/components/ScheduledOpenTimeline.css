@@ -267,7 +267,11 @@
   gap: 10px;
 }
 
-.campaign-close-cell dt { margin: 0; }
+.campaign-close-cell > div { min-width: 0; }
+
+.campaign-close-schedule dd {
+  color: #7a5269;
+}
 
 .campaign-close-button {
   min-width: 78px;
