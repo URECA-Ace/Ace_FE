@@ -207,12 +207,12 @@ function CampaignManagementTab({
       setRecentCampaigns((current) => [
         campaign,
         ...current.filter((item) => String(item.eventId) !== String(campaign.eventId)),
-      ].slice(0, 5))
+      ].slice(0, 6))
       if (campaign.status === 'OPEN') {
         setOpenCampaigns((current) => [
           campaign,
           ...current.filter((item) => String(item.eventId) !== String(campaign.eventId)),
-        ].slice(0, 5))
+        ].slice(0, 6))
       }
       if (Number.isSafeInteger(Number(campaign.round))) {
         setCouponRounds((current) => ({

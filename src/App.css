@@ -153,11 +153,19 @@
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -38px 0 30px;
+  padding: 18px 0 14px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 24px;
-  margin-bottom: 30px;
+  border-bottom: 1px solid rgba(224, 217, 226, 0.82);
+  background: rgba(250, 248, 251, 0.88);
+  box-shadow: 0 10px 24px rgba(47, 31, 46, 0.05);
+  backdrop-filter: blur(14px);
 }
 
 .eyebrow {
@@ -1162,7 +1170,9 @@ h1 {
 }
 
 .monitor-form {
-  flex: 0 0 340px;
+  flex: 1 1 420px;
+  max-width: 440px;
+  min-width: 0;
 }
 
 .monitor-form > label {
@@ -1175,7 +1185,7 @@ h1 {
 
 .monitor-form > div {
   display: grid;
-  grid-template-columns: 110px 1fr;
+  grid-template-columns: minmax(0, 1fr) 124px;
   gap: 8px;
 }
 
@@ -2486,6 +2496,8 @@ tbody tr:hover {
   }
 
   .topbar {
+    margin-top: -24px;
+    padding-top: 14px;
     align-items: center;
   }
 
@@ -2566,6 +2578,11 @@ tbody tr:hover {
 
   .monitor-form {
     flex-basis: auto;
+    max-width: none;
+  }
+
+  .monitor-form > div {
+    grid-template-columns: minmax(0, 1fr) 124px;
   }
 
   .monitor-body {

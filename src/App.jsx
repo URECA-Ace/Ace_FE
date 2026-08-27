@@ -91,7 +91,7 @@ function getSavedCouponRounds(workspace) {
 }
 
 function getSavedCampaigns(workspace) {
-  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 5)
+  if (Array.isArray(workspace.recentCampaigns)) return workspace.recentCampaigns.slice(0, 6)
   return workspace.operationCampaign ? [workspace.operationCampaign] : []
 }
 
@@ -117,7 +117,7 @@ function normalizeCoupons(data) {
 
 function normalizeCampaigns(data) {
   if (!Array.isArray(data)) return []
-  return data.filter((campaign) => campaign?.eventId).slice(0, 5)
+  return data.filter((campaign) => campaign?.eventId).slice(0, 6)
 }
 
 function campaignLabel(campaign) {
