@@ -51,7 +51,6 @@ function CampaignManagementTab({
   setOperationCampaign,
   setEventId,
   setLoadEventId,
-  setActiveTab,
   setNotice,
   campaignLabel,
   formatDate,
@@ -230,9 +229,8 @@ function CampaignManagementTab({
       setNotice({
         tone: 'success',
         toast: true,
-        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되고 Redis 재고가 초기화되었습니다. 발급 운영으로 이동했습니다.`,
+        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되고 Redis 재고가 초기화되었습니다.`,
       })
-      setActiveTab('operations')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       setNotice({

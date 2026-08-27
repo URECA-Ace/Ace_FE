@@ -548,7 +548,6 @@ function App() {
             setOperationCampaign={setOperationCampaign}
             setEventId={setEventId}
             setLoadEventId={setLoadEventId}
-            setActiveTab={setActiveTab}
             setNotice={setNotice}
             campaignLabel={campaignLabel}
             formatDate={formatDate}
