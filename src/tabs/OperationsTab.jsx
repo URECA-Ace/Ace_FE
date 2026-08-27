@@ -104,9 +104,15 @@ function OperationsTab({
   const visibleHistoryRecords = historyScope === 'current'
     ? currentCampaignRecords
     : records
-  const redisDecisionHistory = [...currentCampaignRecords]
-    .filter((record) => Number.isSafeInteger(Number(record.issueSequence)))
-    .sort((left, right) => Number(right.issueSequence) - Number(left.issueSequence))
+  const statusHistoryRecords = [...currentCampaignRecords]
+    .filter((record) => (
+      Number.isSafeInteger(Number(record.issueSequence))
+      || record.status === 'REJECTED_DUPLICATE'
+    ))
+    .sort((left, right) => (
+      new Date(right.acceptedAt ?? right.lastCheckedAt).getTime()
+      - new Date(left.acceptedAt ?? left.lastCheckedAt).getTime()
+    ))
   const campaignHasStarted = selectedIssueCampaign
     && selectedIssueCampaign.status !== 'SCHEDULED'
   const campaignHasClosed = selectedIssueCampaign?.status === 'CLOSED'
@@ -123,11 +129,11 @@ function OperationsTab({
   }
 
   const visibleUserRecords = userSearch.trim()
-    ? records.filter((record) => (
+    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE' && (
         String(record.userId).includes(userSearch.trim())
         || recordCampaignLabel(record, recentCampaigns).toLowerCase().includes(userSearch.trim().toLowerCase())
       ))
-    : records
+    : records.filter((record) => record.status !== 'REJECTED_DUPLICATE')
 
   useEffect(() => {
     if (!issueCampaignPickerOpen) return undefined
@@ -193,7 +199,7 @@ function OperationsTab({
       record.status === 'PROCESSING',
     ).length
     const failed = records.filter((record) =>
-      ['FAILED', 'COMPENSATED', 'REQUEST_FAILED'].includes(record.status),
+      ['FAILED', 'COMPENSATED', 'REJECTED_DUPLICATE', 'REQUEST_FAILED'].includes(record.status),
     ).length
     const latestStock = records.find(
       (record) => record.remainingStock !== null && record.remainingStock !== undefined,
@@ -244,7 +250,12 @@ function OperationsTab({
       return
     }
 
-    const recordId = `${parsedEventId}:${parsedUserId}`
+    const recordId = retryRecord?.id ?? `${parsedEventId}:${parsedUserId}:${crypto.randomUUID()}`
+    const previousUserRecord = records.find((record) => (
+      String(record.eventId) === String(parsedEventId)
+      && String(record.userId) === String(parsedUserId)
+      && record.status !== 'REJECTED_DUPLICATE'
+    ))
     const idempotencyKey = retryRecord?.idempotencyKey ?? crypto.randomUUID()
     const initialEvent = eventItem(
       retryRecord ? 'RETRY' : 'REQUEST',
@@ -257,7 +268,7 @@ function OperationsTab({
     setNotice(null)
     setSelectedId(recordId)
     updateRecords((current) => {
-      const previous = current.find((record) => record.id === recordId)
+      const previous = retryRecord ?? current.find((record) => record.id === recordId)
       const next = {
         id: recordId,
         eventId: parsedEventId,
@@ -304,23 +315,25 @@ function OperationsTab({
       if (!retryRecord) setUserId('')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
-      const message = errorLabels[apiError.code] ?? apiError.message
+      const isDuplicate = apiError.code === 'ALREADY_ISSUED'
+      const message = isDuplicate ? '이미 발급된 사용자입니다. 중복 발급이 차단되었습니다.' : (errorLabels[apiError.code] ?? apiError.message)
       updateRecords((current) =>
         current.map((record) =>
           record.id === recordId
             ? {
                 ...record,
-                status: 'REQUEST_FAILED',
+                status: isDuplicate ? 'REJECTED_DUPLICATE' : 'REQUEST_FAILED',
                 error: { code: apiError.code, message, incidentId: apiError.incidentId },
                 lastCheckedAt: new Date().toISOString(),
                 events: [
-                  eventItem('ERROR', apiError.code, message, 'danger'),
+                  eventItem(isDuplicate ? 'DUPLICATE' : 'ERROR', isDuplicate ? '중복 발급 차단' : apiError.code, message, 'danger'),
                   ...record.events,
                 ],
               }
             : record,
         ),
       )
+      if (isDuplicate && previousUserRecord) setSelectedId(previousUserRecord.id)
       setNotice({ tone: 'danger', message })
     } finally {
       setSubmitting(false)
@@ -433,6 +446,17 @@ function OperationsTab({
                 >
                   상태 새로고침
                 </button>
+
+                {records.some((record) => (
+                  String(record.eventId) === String(selected.eventId)
+                  && String(record.userId) === String(selected.userId)
+                  && record.status === 'REJECTED_DUPLICATE'
+                )) && (
+                  <div className="duplicate-notice" role="status">
+                    <strong>중복 발급 요청이 있었습니다.</strong>
+                    <span>이미 발급된 사용자라 추가 발급은 차단되었습니다.</span>
+                  </div>
+                )}
 
                 <dl className="issue-detail-grid">
             <div>
@@ -682,7 +706,7 @@ function OperationsTab({
               {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
             </span>
           </div>
-          {redisDecisionHistory.length > 0 || campaignHasStarted || campaignHasClosed ? (
+          {statusHistoryRecords.length > 0 || campaignHasStarted || campaignHasClosed ? (
             <ol className="timeline">
               {campaignHasClosed && (
                 <li>
@@ -698,7 +722,18 @@ function OperationsTab({
                   </div>
                 </li>
               )}
-              {redisDecisionHistory.map((record) => (
+              {statusHistoryRecords.map((record) => record.status === 'REJECTED_DUPLICATE' ? (
+                <li key={`${record.id}:duplicate`} className="danger">
+                  <span className="timeline-dot" />
+                  <div>
+                    <div className="timeline-title">
+                      <strong>중복 발급 차단 · 사용자 {record.userId}</strong>
+                      <time>{formatDate(record.lastCheckedAt)}</time>
+                    </div>
+                    <p>이미 발급 완료된 사용자에게 중복 발급 요청이 있었습니다.</p>
+                  </div>
+                </li>
+              ) : (
                 <li key={`${record.id}:${record.issueSequence}`} className="success">
                   <span className="timeline-dot" />
                   <div>

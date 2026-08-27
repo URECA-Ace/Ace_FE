@@ -2343,6 +2343,23 @@ h2 {
   margin-top: 13px;
 }
 
+.duplicate-notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(217, 38, 84, 0.28);
+  border-left: 3px solid #d92654;
+  border-radius: 9px;
+  color: #a51f40;
+  background: #fff4f6;
+  font-size: 9px;
+}
+
+.duplicate-notice span {
+  color: #b66b7d;
+}
+
 .user-detail-panel .issue-detail-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
