@@ -7,7 +7,21 @@ import IntegrityReportTab from './tabs/IntegrityReportTab'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
-const CAMPAIGN_REFRESH_INTERVAL_MS = 1000
+
+function millisecondsUntilNextCampaignRefresh(now = new Date()) {
+  const next = new Date(now)
+  next.setMilliseconds(0)
+
+  if (now.getSeconds() < 1) {
+    next.setSeconds(1)
+  } else if (now.getSeconds() < 31) {
+    next.setSeconds(31)
+  } else {
+    next.setMinutes(now.getMinutes() + 1, 1, 0)
+  }
+
+  return Math.max(250, next.getTime() - now.getTime())
+}
 
 const PARTICIPANT_COUNT = 20000
 const DEFAULT_CONCURRENCY = 128
@@ -354,7 +368,10 @@ function App() {
 
     function scheduleNextRefresh() {
       if (!disposed) {
-        refreshTimer = window.setTimeout(refreshCampaigns, CAMPAIGN_REFRESH_INTERVAL_MS)
+        refreshTimer = window.setTimeout(
+          refreshCampaigns,
+          millisecondsUntilNextCampaignRefresh(),
+        )
       }
     }
 
@@ -383,8 +400,10 @@ function App() {
         ) ?? openEvents[0] ?? campaigns.find(
           (campaign) => String(campaign.eventId) === String(initialWorkspace.operationCampaign?.eventId),
         ) ?? campaigns[0]
-        setOperationCampaign(preferred)
-        setEventId((current) => openEvents.some(
+        setOperationCampaign((current) => campaigns.find(
+          (campaign) => String(campaign.eventId) === String(current?.eventId),
+        ) ?? preferred)
+        setEventId((current) => campaigns.some(
           (campaign) => String(campaign.eventId) === String(current),
         ) ? current : String(preferred.eventId))
         setLoadEventId((current) => openEvents.some(

@@ -104,6 +104,7 @@ function OperationsTab({
     .sort((left, right) => Number(right.issueSequence) - Number(left.issueSequence))
   const campaignHasStarted = selectedIssueCampaign
     && selectedIssueCampaign.status !== 'SCHEDULED'
+  const campaignHasClosed = selectedIssueCampaign?.status === 'CLOSED'
 
   function recordCampaignLabel(record, campaigns) {
     const campaign = campaigns.find(
@@ -635,8 +636,22 @@ function OperationsTab({
               {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '캠페인 선택 대기'}
             </span>
           </div>
-          {redisDecisionHistory.length > 0 || campaignHasStarted ? (
+          {redisDecisionHistory.length > 0 || campaignHasStarted || campaignHasClosed ? (
             <ol className="timeline">
+              {campaignHasClosed && (
+                <li>
+                  <span className="timeline-dot" />
+                  <div>
+                    <div className="timeline-title">
+                      <strong>쿠폰 회차 마감</strong>
+                      <time>{formatDate(selectedIssueCampaign.statusChangedAt ?? selectedIssueCampaign.closeAt)}</time>
+                    </div>
+                    <p>
+                      {campaignLabel(selectedIssueCampaign)} · 예약 마감 또는 관리자 수동 마감으로 발급 종료
+                    </p>
+                  </div>
+                </li>
+              )}
               {redisDecisionHistory.map((record) => (
                 <li key={`${record.id}:${record.issueSequence}`} className="success">
                   <span className="timeline-dot" />
