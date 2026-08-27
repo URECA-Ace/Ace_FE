@@ -1598,12 +1598,17 @@ h1 {
   font-size: 7px;
 }
 
+.issuance-log-table {
+  overflow-x: auto;
+}
+
 .issuance-log-columns,
 .issuance-log-list li {
   display: grid;
-  grid-template-columns: 100px minmax(120px, 1fr) 110px;
+  grid-template-columns: 78px 72px 84px minmax(150px, 1.3fr) 116px 82px 104px;
   align-items: center;
-  column-gap: 12px;
+  column-gap: 10px;
+  min-width: 800px;
 }
 
 .issuance-log-columns {
@@ -1622,6 +1627,7 @@ h1 {
   padding: 0;
   list-style: none;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
@@ -1644,7 +1650,14 @@ h1 {
   font-size: 9px;
 }
 
-.issuance-log-list li span {
+.issuance-log-list li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issuance-log-list li .issuance-log-user-id {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1661,6 +1674,10 @@ h1 {
 .issuance-log-list li time {
   color: #8f8792;
   text-align: right;
+}
+
+.issuance-log-list li em {
+  font-style: normal;
 }
 
 .issuance-log-empty {
@@ -3158,11 +3175,6 @@ tbody tr:hover {
 
   .issuance-log-summary {
     text-align: left;
-  }
-
-  .issuance-log-columns,
-  .issuance-log-list li {
-    grid-template-columns: 78px minmax(100px, 1fr) 92px;
   }
 
   .monitor-error small {

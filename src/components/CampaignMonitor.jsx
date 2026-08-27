@@ -30,6 +30,12 @@ const CAMPAIGN_STATUS = {
   },
 }
 
+const ISSUE_STATUS = {
+  ISSUED: { label: '발급 완료', tone: 'success' },
+  USED: { label: '사용 완료', tone: 'success' },
+  CANCELED: { label: '발급 취소', tone: 'neutral' },
+}
+
 const ERROR_MESSAGES = {
   EVENT_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
   EVENT_STATS_TEMPORARILY_UNAVAILABLE:
@@ -55,6 +61,10 @@ function campaignLabel(campaign) {
   return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차(${campaign.eventId})`
 }
 
+function issueStatusMeta(status) {
+  return ISSUE_STATUS[status] ?? { label: status || '상태 확인 필요', tone: 'neutral' }
+}
+
 function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const defaultEventId = recentCampaigns[0]?.eventId ?? selectedEventId
   const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
@@ -68,8 +78,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const monitoringActiveRef = useRef(false)
   const requestInFlightRef = useRef(false)
   const logCursorRef = useRef(0)
-  const logListRef = useRef(null)
-  const followLatestLogRef = useRef(true)
   const polling = monitoredEventId !== null
   const effectiveEventId = recentCampaigns.some(
     (campaign) => String(campaign.eventId) === String(eventId),
@@ -115,8 +123,8 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
             uniqueBySequence.set(log.issueSequence, log)
           })
           return [...uniqueBySequence.values()]
-            .sort((left, right) => left.issueSequence - right.issueSequence)
-            .slice(-MAX_VISIBLE_LOGS)
+            .sort((left, right) => right.issueSequence - left.issueSequence)
+            .slice(0, MAX_VISIBLE_LOGS)
         })
       }
       setError(null)
@@ -176,11 +184,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     }
   }, [monitoredEventId, readMonitorSnapshot])
 
-  useEffect(() => {
-    if (!followLatestLogRef.current || !logListRef.current) return
-    logListRef.current.scrollTop = logListRef.current.scrollHeight
-  }, [issuanceLogs])
-
   useEffect(() => () => {
     monitoringActiveRef.current = false
     requestInFlightRef.current = false
@@ -197,7 +200,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     setStats(null)
     setIssuanceLogs([])
     logCursorRef.current = 0
-    followLatestLogRef.current = true
     setError(null)
     pollingControllerRef.current?.abort()
     pollingControllerRef.current = null
@@ -219,7 +221,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     setStats(null)
     setIssuanceLogs([])
     logCursorRef.current = 0
-    followLatestLogRef.current = true
     setError(null)
     setMonitoredEventId(parsedEventId)
   }
@@ -346,34 +347,45 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           </div>
         </div>
 
-        <div className="issuance-log-columns" aria-hidden="true">
-          <span>발급 순번</span>
-          <span>사용자</span>
-          <span>DB 확정 시각</span>
-        </div>
-
         {issuanceLogs.length > 0 ? (
-          <ol
-            className="issuance-log-list"
-            ref={logListRef}
-            aria-label="실시간 DB 발급 확정 로그"
-            aria-live="polite"
-            onScroll={(event) => {
-              const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
-              followLatestLogRef.current = scrollHeight - scrollTop - clientHeight < 24
-            }}
-          >
-            {issuanceLogs.map((log) => (
-              <li key={log.issueSequence}>
-                <strong>#{log.issueSequence.toLocaleString()}</strong>
-                <span>
-                  <i aria-hidden="true" />
-                  USER {log.userId.toLocaleString()}
-                </span>
-                <time dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
-              </li>
-            ))}
-          </ol>
+          <div className="issuance-log-table">
+            <div className="issuance-log-columns" aria-hidden="true">
+              <span>발급 순번</span>
+              <span>사용자 ID</span>
+              <span>이름</span>
+              <span>이메일</span>
+              <span>휴대폰 번호</span>
+              <span>상태</span>
+              <span>DB 확정 시각</span>
+            </div>
+            <ol
+              className="issuance-log-list"
+              aria-label="실시간 DB 발급 확정 로그"
+              aria-live="polite"
+            >
+              {issuanceLogs.map((log) => {
+                const logStatus = issueStatusMeta(log.status)
+                return (
+                  <li key={log.issueSequence}>
+                    <strong>#{log.issueSequence.toLocaleString()}</strong>
+                    <span className="issuance-log-user-id">
+                      <i aria-hidden="true" />
+                      {log.userId.toLocaleString()}
+                    </span>
+                    <span title={log.maskedUserName}>{log.maskedUserName || '-'}</span>
+                    <span title={log.maskedUserEmail}>{log.maskedUserEmail || '-'}</span>
+                    <span title={log.maskedUserPhone}>{log.maskedUserPhone || '-'}</span>
+                    <span>
+                      <em className={`status-badge compact ${logStatus.tone}`}>
+                        {logStatus.label}
+                      </em>
+                    </span>
+                    <time dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
         ) : (
           <div className="issuance-log-empty">
             <strong>{polling ? '발급 확정 로그를 기다리는 중입니다.' : '실시간 관제를 시작해 주세요.'}</strong>
