@@ -31,6 +31,7 @@ const CAMPAIGN_STATUS = {
 }
 
 const ISSUE_STATUS = {
+  PROCESSING: { label: '처리 중', tone: 'waiting' },
   ISSUED: { label: '발급 완료', tone: 'success' },
   USED: { label: '사용 완료', tone: 'success' },
   CANCELED: { label: '발급 취소', tone: 'neutral' },
@@ -344,9 +345,9 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
       <div className="issuance-log-panel">
         <div className="issuance-log-header">
           <div>
-            <span className="issuance-log-kicker">MYSQL CONFIRMED STREAM</span>
-            <h3>DB 발급 확정 로그</h3>
-            <p>Redis 판정을 통과한 뒤 MySQL 저장까지 완료된 사용자와 선착순 순번입니다.</p>
+            <span className="issuance-log-kicker">REDIS TO MYSQL ISSUE STREAM</span>
+            <h3>DB 발급 처리 로그</h3>
+            <p>Redis 판정 승인부터 MySQL 저장 완료까지 상태가 실시간으로 갱신됩니다.</p>
           </div>
           <div className="issuance-log-summary">
             <span>{visibleStats?.confirmedQuantity?.toLocaleString() ?? 0}건 확정</span>
@@ -367,14 +368,14 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
             </div>
             <ol
               className="issuance-log-list"
-              aria-label="실시간 DB 발급 확정 로그"
+              aria-label="실시간 DB 발급 처리 로그"
               aria-live="polite"
             >
               {issuanceLogs.map((log) => {
                 const logStatus = issueStatusMeta(log.status)
                 return (
                   <li key={log.issueSequence}>
-                    <span className="issuance-log-status-dot" title={logStatus.label} aria-label={logStatus.label} />
+                    <span className={`issuance-log-status-dot ${logStatus.tone}`} title={logStatus.label} aria-label={logStatus.label} />
                     <strong>#{log.issueSequence.toLocaleString()}</strong>
                     <span title={log.maskedUserName}>{log.maskedUserName || '-'}</span>
                     <span title={log.maskedUserEmail}>{log.maskedUserEmail || '-'}</span>
@@ -392,8 +393,8 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
           </div>
         ) : (
           <div className="issuance-log-empty">
-            <strong>{polling ? '발급 확정 로그를 기다리는 중입니다.' : '실시간 관제를 시작해 주세요.'}</strong>
-            <span>부하 테스트가 시작되면 DB 저장이 완료된 순서대로 이곳에 추가됩니다.</span>
+            <strong>{polling ? '발급 처리 로그를 기다리는 중입니다.' : '실시간 관제를 시작해 주세요.'}</strong>
+            <span>부하 테스트가 시작되면 처리 중 상태부터 발급 완료까지 이곳에 갱신됩니다.</span>
           </div>
         )}
       </div>

@@ -1675,6 +1675,11 @@ h1 {
   box-shadow: 0 0 0 3px rgba(19, 169, 120, 0.1);
 }
 
+.issuance-log-status-dot.waiting {
+  background: #e2a100;
+  box-shadow: 0 0 0 3px rgba(226, 161, 0, 0.12);
+}
+
 .issuance-log-list li time {
   color: #8f8792;
 }
