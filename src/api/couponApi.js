@@ -135,3 +135,11 @@ export function initializeCampaign(eventId, signal) {
     headers: { Accept: 'application/json' },
   })
 }
+
+export function verifyAllConsistency(signal) {
+  return request('/internal/consistency/verify', {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}

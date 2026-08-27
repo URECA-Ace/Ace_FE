@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ApiError, verifyAllConsistency } from '../api/couponApi'
 import './IntegrityReportTab.css'
 
 const MOCK_RECOVERY_DURATION_MS = 4000
@@ -33,6 +34,21 @@ const RECOVERY_STATUS_META = {
   SUCCESS: { label: '복구 완료', tone: 'success' },
   FAIL: { label: '복구 실패', tone: 'danger' },
 }
+
+const RESULT_SEARCH_FIELDS = [
+  { id: 'checkName', label: '검증 항목' },
+  { id: 'status', label: '상태' },
+  { id: 'scope', label: '대상' },
+]
+
+// 정합성 검증 에러/실패 패널은 상태가 이미 고정되어 있으므로 검색 항목에서 상태를 제외한다.
+const RESULT_SEARCH_FIELDS_FIXED_STATUS = RESULT_SEARCH_FIELDS.filter((field) => field.id !== 'status')
+
+// 복구 이력에는 대상(scope) 정보가 없으므로 검증 항목/상태(복구 결과)만 검색 항목으로 제공한다.
+const RECOVERY_SEARCH_FIELDS = [
+  { id: 'checkName', label: '검증 항목' },
+  { id: 'status', label: '상태' },
+]
 
 // 실제 복구 방법 목록은 checkName별로 백엔드가 내려줄 예정. 화면 확인용 임시 목록이다.
 const MOCK_RECOVERY_METHODS = [
@@ -104,11 +120,105 @@ function formatDiff(diffDetail) {
   return Object.entries(diffDetail).map(([key, value]) => `${key} ${value}`).join(' · ')
 }
 
+// FAIL 결과가 복구까지 끝난 경우, 최근 검증 결과 표에는 원래 상태(실패) 대신 복구 결과를 보여준다.
+function recentStatusMeta(result) {
+  if (result.status === 'FAIL' && result.recoveryStatus === 'SUCCESS') return RECOVERY_STATUS_META.SUCCESS
+  if (result.status === 'FAIL' && result.recoveryStatus === 'FAIL') return RECOVERY_STATUS_META.FAIL
+  return RESULT_STATUS_META[result.status]
+}
+
+function matchesResultField(result, field, needle) {
+  if (field === 'checkName') return (CHECK_LABELS[result.checkName] ?? result.checkName).toLowerCase().includes(needle)
+  if (field === 'status') return recentStatusMeta(result).label.toLowerCase().includes(needle)
+  if (field === 'scope') return scopeLabel(result).toLowerCase().includes(needle)
+  return true
+}
+
+function filterResults(list, field, text) {
+  const needle = text.trim().toLowerCase()
+  if (!needle) return list
+  return list.filter((result) => matchesResultField(result, field, needle))
+}
+
+function matchesRecoveryField(entry, field, needle) {
+  if (field === 'checkName') return (CHECK_LABELS[entry.checkName] ?? entry.checkName).toLowerCase().includes(needle)
+  if (field === 'status') return (RECOVERY_STATUS_META[entry.status]?.label ?? '').toLowerCase().includes(needle)
+  return true
+}
+
+function filterRecoveryHistory(list, field, text) {
+  const needle = text.trim().toLowerCase()
+  if (!needle) return list
+  return list.filter((entry) => matchesRecoveryField(entry, field, needle))
+}
+
+// 패널 우측 상단의 검색 항목 탭 + 텍스트 검색 UI. 항목별로 검색 대상 필드가 다르다.
+function FieldSearch({ fields, activeField, onFieldChange, value, onValueChange, placeholder }) {
+  return (
+    <div className="field-search">
+      <div className="field-search-tabs" role="tablist">
+        {fields.map((field) => (
+          <button
+            key={field.id}
+            type="button"
+            role="tab"
+            aria-selected={activeField === field.id}
+            className={`field-search-tab ${activeField === field.id ? 'active' : ''}`}
+            onClick={() => onFieldChange(field.id)}
+          >
+            {field.label}
+          </button>
+        ))}
+      </div>
+      <label className="field-search-input">
+        <span aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          placeholder={placeholder}
+        />
+      </label>
+    </div>
+  )
+}
+
 function IntegrityReportTab() {
   const [results, setResults] = useState(createInitialResults)
   const [selectedMethodByResult, setSelectedMethodByResult] = useState({})
   const [recoveryHistory, setRecoveryHistory] = useState([])
+  const [detailResult, setDetailResult] = useState(null)
+  const [verifyingAll, setVerifyingAll] = useState(false)
+  const [verificationNotice, setVerificationNotice] = useState(null)
+  const [recentSearchField, setRecentSearchField] = useState('checkName')
+  const [recentSearchText, setRecentSearchText] = useState('')
+  const [errorSearchField, setErrorSearchField] = useState('checkName')
+  const [errorSearchText, setErrorSearchText] = useState('')
+  const [failSearchField, setFailSearchField] = useState('checkName')
+  const [failSearchText, setFailSearchText] = useState('')
+  const [recoverySearchField, setRecoverySearchField] = useState('checkName')
+  const [recoverySearchText, setRecoverySearchText] = useState('')
   const recoveryTimersRef = useRef({})
+
+  async function verifyAll() {
+    setVerifyingAll(true)
+    setVerificationNotice(null)
+
+    try {
+      const jobExecutionId = await verifyAllConsistency()
+      setVerificationNotice({
+        tone: 'success',
+        message: `전체 검사 요청이 접수되었습니다. 작업 ID: ${jobExecutionId}`,
+      })
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : '전체 검사 요청 중 알 수 없는 오류가 발생했습니다.'
+      setVerificationNotice({ tone: 'danger', message })
+    } finally {
+      setVerifyingAll(false)
+    }
+  }
 
   useEffect(() => () => {
     Object.values(recoveryTimersRef.current).forEach(window.clearTimeout)
@@ -159,9 +269,18 @@ function IntegrityReportTab() {
     recoveryTimersRef.current[resultId] = timer
   }
 
-  const recentResults = results.slice(0, RECENT_RESULT_LIMIT)
-  const errorResults = results.filter((item) => item.status === 'ERROR').slice(0, RECENT_RESULT_LIMIT)
-  const failResults = results.filter((item) => item.status === 'FAIL').slice(0, RECENT_RESULT_LIMIT)
+  const recentResults = filterResults(results, recentSearchField, recentSearchText).slice(0, RECENT_RESULT_LIMIT)
+  const errorResults = filterResults(
+    results.filter((item) => item.status === 'ERROR'),
+    errorSearchField,
+    errorSearchText,
+  ).slice(0, RECENT_RESULT_LIMIT)
+  const failResults = filterResults(
+    results.filter((item) => item.status === 'FAIL'),
+    failSearchField,
+    failSearchText,
+  ).slice(0, RECENT_RESULT_LIMIT)
+  const filteredRecoveryHistory = filterRecoveryHistory(recoveryHistory, recoverySearchField, recoverySearchText)
 
   return (
     <section className="reconciliation-report" aria-labelledby="reconciliation-title">
@@ -171,7 +290,26 @@ function IntegrityReportTab() {
           <h2 id="reconciliation-title">데이터 정합성 리포트</h2>
           <p>최근 검증 결과를 확인하고, 실패한 항목은 복구 방법을 선택해 복구를 진행합니다.</p>
         </div>
-        <span className="api-chip subtle">API 연동 예정 · 예시 데이터</span>
+        <div className="consistency-heading-actions">
+          <span className="api-chip">POST · /internal/consistency/verify</span>
+          <button
+            type="button"
+            className="primary-button consistency-verify-button"
+            onClick={verifyAll}
+            disabled={verifyingAll}
+          >
+            {verifyingAll ? '전체 검사 요청 중…' : '전체 검사 실행'}
+          </button>
+          {verificationNotice && (
+            <p
+              className={`consistency-verification-notice ${verificationNotice.tone}`}
+              role={verificationNotice.tone === 'danger' ? 'alert' : 'status'}
+              aria-live="polite"
+            >
+              {verificationNotice.message}
+            </p>
+          )}
+        </div>
       </div>
 
       <section className="panel recent-results-panel" aria-labelledby="recent-results-title">
@@ -180,6 +318,14 @@ function IntegrityReportTab() {
             <span className="section-number">01</span>
             <h2 id="recent-results-title">최근 검증 결과</h2>
           </div>
+          <FieldSearch
+            fields={RESULT_SEARCH_FIELDS}
+            activeField={recentSearchField}
+            onFieldChange={setRecentSearchField}
+            value={recentSearchText}
+            onValueChange={setRecentSearchText}
+            placeholder="검색어 입력"
+          />
         </div>
         <div className="table-wrap recent-results-scroll">
           <table>
@@ -194,7 +340,7 @@ function IntegrityReportTab() {
             </thead>
             <tbody>
               {recentResults.length > 0 ? recentResults.map((result) => {
-                const meta = RESULT_STATUS_META[result.status]
+                const meta = recentStatusMeta(result)
                 return (
                   <tr key={result.id}>
                     <td><strong>{CHECK_LABELS[result.checkName] ?? result.checkName}</strong></td>
@@ -206,7 +352,9 @@ function IntegrityReportTab() {
                 )
               }) : (
                 <tr>
-                  <td colSpan="5" className="table-empty">검증 결과가 없습니다.</td>
+                  <td colSpan="5" className="table-empty">
+                    {recentSearchText.trim() ? '검색 조건에 맞는 결과가 없습니다.' : '검증 결과가 없습니다.'}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -222,7 +370,17 @@ function IntegrityReportTab() {
             <span className="section-number">02</span>
             <h2 id="verification-error-title">정합성 검증 에러</h2>
           </div>
-          <span className="api-chip subtle">status = ERROR</span>
+          <div className="panel-heading-actions">
+            <span className="api-chip subtle">status = ERROR</span>
+            <FieldSearch
+              fields={RESULT_SEARCH_FIELDS_FIXED_STATUS}
+              activeField={errorSearchField}
+              onFieldChange={setErrorSearchField}
+              value={errorSearchText}
+              onValueChange={setErrorSearchText}
+              placeholder="검색어 입력"
+            />
+          </div>
         </div>
         <div className="reconciliation-scroll-area">
           {errorResults.length > 0 ? (
@@ -237,8 +395,8 @@ function IntegrityReportTab() {
             </ul>
           ) : (
             <div className="empty-state small">
-              <strong>검증 에러가 없습니다</strong>
-              <p>Check 실행 자체가 실패한 항목이 없습니다.</p>
+              <strong>{errorSearchText.trim() ? '검색 조건에 맞는 결과가 없습니다' : '검증 에러가 없습니다'}</strong>
+              <p>{errorSearchText.trim() ? '다른 검색어로 다시 시도해보세요.' : 'Check 실행 자체가 실패한 항목이 없습니다.'}</p>
             </div>
           )}
         </div>
@@ -250,7 +408,17 @@ function IntegrityReportTab() {
             <span className="section-number">03</span>
             <h2 id="verification-fail-title">정합성 검증 실패</h2>
           </div>
-          <span className="api-chip subtle">status = FAIL</span>
+          <div className="panel-heading-actions">
+            <span className="api-chip subtle">status = FAIL</span>
+            <FieldSearch
+              fields={RESULT_SEARCH_FIELDS_FIXED_STATUS}
+              activeField={failSearchField}
+              onFieldChange={setFailSearchField}
+              value={failSearchText}
+              onValueChange={setFailSearchText}
+              placeholder="검색어 입력"
+            />
+          </div>
         </div>
         <div className="reconciliation-scroll-area">
           {failResults.length > 0 ? (
@@ -268,7 +436,17 @@ function IntegrityReportTab() {
                     </div>
                     <span className={`status-badge ${recoveryMeta.tone}`}>{recoveryMeta.label}</span>
                   </div>
-                  <p className="fail-item-diff">위반 {result.violationCount}건 · {formatDiff(result.diffDetail)}</p>
+                  <div className="fail-item-diff-row">
+                    <p className="fail-item-diff">위반 {result.violationCount}건 · {formatDiff(result.diffDetail)}</p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => setDetailResult(result)}
+                      disabled={!result.diffDetail}
+                    >
+                      자세히 보기
+                    </button>
+                  </div>
                   <div className="fail-item-recovery">
                     <select
                       value={selectedMethodByResult[result.id] ?? ''}
@@ -301,8 +479,8 @@ function IntegrityReportTab() {
           </ul>
           ) : (
             <div className="empty-state small">
-              <strong>실패한 검증이 없습니다</strong>
-              <p>불일치가 감지된 검증 결과가 없습니다.</p>
+              <strong>{failSearchText.trim() ? '검색 조건에 맞는 결과가 없습니다' : '실패한 검증이 없습니다'}</strong>
+              <p>{failSearchText.trim() ? '다른 검색어로 다시 시도해보세요.' : '불일치가 감지된 검증 결과가 없습니다.'}</p>
             </div>
           )}
         </div>
@@ -315,6 +493,14 @@ function IntegrityReportTab() {
             <span className="section-number">04</span>
             <h2 id="recovery-history-title">복구 이력</h2>
           </div>
+          <FieldSearch
+            fields={RECOVERY_SEARCH_FIELDS}
+            activeField={recoverySearchField}
+            onFieldChange={setRecoverySearchField}
+            value={recoverySearchText}
+            onValueChange={setRecoverySearchText}
+            placeholder="검색어 입력"
+          />
         </div>
         <div className="table-wrap">
           <table>
@@ -328,7 +514,7 @@ function IntegrityReportTab() {
               </tr>
             </thead>
             <tbody>
-              {recoveryHistory.length > 0 ? recoveryHistory.map((entry) => {
+              {filteredRecoveryHistory.length > 0 ? filteredRecoveryHistory.map((entry) => {
                 const meta = RECOVERY_STATUS_META[entry.status] ?? RECOVERY_STATUS_META.NONE
                 return (
                   <tr key={entry.id}>
@@ -341,13 +527,42 @@ function IntegrityReportTab() {
                 )
               }) : (
                 <tr>
-                  <td colSpan="5" className="table-empty">복구를 진행한 이력이 없습니다.</td>
+                  <td colSpan="5" className="table-empty">
+                    {recoverySearchText.trim() ? '검색 조건에 맞는 결과가 없습니다.' : '복구를 진행한 이력이 없습니다.'}
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {detailResult && (
+        <div
+          className="coupon-picker-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDetailResult(null)
+          }}
+        >
+          <section className="coupon-picker-modal diff-detail-modal" role="dialog" aria-modal="true" aria-labelledby="diff-detail-title">
+            <div className="coupon-picker-header">
+              <div>
+                <span className="eyebrow">DIFF DETAIL</span>
+                <h2 id="diff-detail-title">{CHECK_LABELS[detailResult.checkName] ?? detailResult.checkName}</h2>
+                <p>{scopeLabel(detailResult)} · {formatDate(detailResult.executedAt)} · 위반 {detailResult.violationCount}건</p>
+              </div>
+              <button type="button" className="coupon-picker-close" onClick={() => setDetailResult(null)} aria-label="상세 정보 닫기">×</button>
+            </div>
+            {detailResult.diffDetail ? (
+              <pre className="diff-detail-json"><code>{JSON.stringify(detailResult.diffDetail, null, 2)}</code></pre>
+            ) : (
+              <p className="catalog-empty">diffDetail이 없습니다.</p>
+            )}
+            <button type="button" className="coupon-picker-cancel" onClick={() => setDetailResult(null)}>닫기</button>
+          </section>
+        </div>
+      )}
     </section>
   )
 }
