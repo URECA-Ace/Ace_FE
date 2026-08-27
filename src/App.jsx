@@ -50,17 +50,17 @@ const ERROR_LABELS = {
   SOLD_OUT: '재고가 모두 소진되었습니다.',
   ALREADY_ISSUED: '이미 발급받은 사용자입니다.',
   IDEMPOTENCY_CONFLICT: '멱등성 키가 다른 요청에 사용되었습니다.',
-  EVENT_NOT_OPEN: '아직 오픈하지 않은 캠페인입니다.',
-  EVENT_CLOSED: '종료된 캠페인입니다.',
-  EVENT_NOT_FOUND: '캠페인을 찾을 수 없습니다.',
+  EVENT_NOT_OPEN: '아직 오픈하지 않은 쿠폰입니다.',
+  EVENT_CLOSED: '종료된 쿠폰입니다.',
+  EVENT_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
   COUPON_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
-  EVENT_CONFIGURATION_CONFLICT: '같은 회차의 캠페인이 다른 설정으로 이미 존재합니다.',
-  CAMPAIGN_CONFIG_CONFLICT: 'Redis에 다른 설정으로 초기화된 캠페인입니다.',
-  CAMPAIGN_NOT_INITIALIZABLE: '현재 상태에서는 캠페인을 초기화할 수 없습니다.',
-  CAMPAIGN_INIT_FAILED: 'Redis 캠페인 초기화에 실패했습니다.',
+  EVENT_CONFIGURATION_CONFLICT: '같은 회차의 쿠폰이 다른 설정으로 이미 존재합니다.',
+  CAMPAIGN_CONFIG_CONFLICT: 'Redis에 다른 설정으로 초기화된 쿠폰입니다.',
+  CAMPAIGN_NOT_INITIALIZABLE: '현재 상태에서는 쿠폰을 초기화할 수 없습니다.',
+  CAMPAIGN_INIT_FAILED: 'Redis 쿠폰 초기화에 실패했습니다.',
   CAMPAIGN_INITIALIZATION_TEMPORARILY_UNAVAILABLE:
-    '캠페인은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
-  CAMPAIGN_CLOSE_TEMPORARILY_UNAVAILABLE: '캠페인을 일시적으로 마감할 수 없습니다. 잠시 후 다시 시도하세요.',
+    '쿠폰은 저장되었지만 Redis 초기화에 실패했습니다. 잠시 후 복구 상태를 확인하세요.',
+  CAMPAIGN_CLOSE_TEMPORARILY_UNAVAILABLE: '쿠폰을 일시적으로 마감할 수 없습니다. 잠시 후 다시 시도하세요.',
   INVALID_STATE_TRANSITION: '현재 상태에서는 요청한 변경을 수행할 수 없습니다.',
   ISSUE_NOT_FOUND: '발급 요청을 찾을 수 없습니다.',
   ISSUE_TEMPORARILY_UNAVAILABLE: '발급 시스템을 일시적으로 사용할 수 없습니다.',
@@ -179,7 +179,7 @@ function App() {
     const parsedConcurrency = Number(concurrency)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '부하 발급 캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '부하 발급 쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedConcurrency) || parsedConcurrency < 1 || parsedConcurrency > 300) {
@@ -189,7 +189,7 @@ function App() {
     if (!selectedLoadCampaign || Number(selectedLoadCampaign.eventId) !== parsedEventId) {
       setNotice({
         tone: 'danger',
-        message: '최근 발급 회차에서 트래픽을 실행할 캠페인을 선택하세요.',
+        message: '최근 발급 회차에서 트래픽을 실행할 쿠폰을 선택하세요.',
       })
       return
     }
@@ -197,13 +197,13 @@ function App() {
     try {
       const stats = await getIssuanceStats(parsedEventId)
       if (stats.status !== 'OPEN') {
-        setNotice({ tone: 'danger', message: `OPEN 캠페인만 실행할 수 있습니다. 현재 상태: ${stats.status}` })
+        setNotice({ tone: 'danger', message: `OPEN 쿠폰만 실행할 수 있습니다. 현재 상태: ${stats.status}` })
         return
       }
       if (stats.remainingStock !== stats.totalStock) {
         setNotice({
           tone: 'danger',
-          message: `현재 잔여 재고가 ${stats.remainingStock.toLocaleString()}장입니다. 정확한 검증을 위해 새 10,000장 캠페인을 생성하세요.`,
+          message: `현재 잔여 재고가 ${stats.remainingStock.toLocaleString()}장입니다. 정확한 검증을 위해 새 10,000장 쿠폰을 생성하세요.`,
         })
         return
       }
@@ -212,7 +212,7 @@ function App() {
       setNotice({
         tone: 'danger',
         message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
-          ? 'Redis에 초기화되지 않은 캠페인입니다. 새 이벤트를 생성한 뒤 실행하세요.'
+          ? 'Redis에 초기화되지 않은 쿠폰입니다. 새 이벤트를 생성한 뒤 실행하세요.'
           : ERROR_LABELS[apiError.code] ?? apiError.message,
       })
       return

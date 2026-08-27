@@ -7,7 +7,7 @@ const CAMPAIGN_STATUS = {
   SCHEDULED: {
     label: '발급 대기',
     tone: 'scheduled',
-    description: '아직 발급이 시작되지 않은 캠페인입니다.',
+    description: '아직 발급이 시작되지 않은 쿠폰입니다.',
   },
   OPEN: {
     label: '발급 진행 중',
@@ -20,14 +20,14 @@ const CAMPAIGN_STATUS = {
     description: '준비된 쿠폰이 모두 배정되어 추가 요청이 거절됩니다.',
   },
   CLOSED: {
-    label: '캠페인 종료',
+    label: '쿠폰 종료',
     tone: 'closed',
-    description: '캠페인 마감 시각이 지나 발급이 종료되었습니다.',
+    description: '쿠폰 마감 시각이 지나 발급이 종료되었습니다.',
   },
 }
 
 const ERROR_MESSAGES = {
-  EVENT_NOT_FOUND: '캠페인을 찾을 수 없습니다.',
+  EVENT_NOT_FOUND: '쿠폰을 찾을 수 없습니다.',
   EVENT_STATS_TEMPORARILY_UNAVAILABLE:
     'Redis 발급 현황이 아직 초기화되지 않았거나 일시적으로 조회할 수 없습니다.',
   NETWORK_ERROR: '백엔드 서버에 연결할 수 없습니다.',
@@ -158,7 +158,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     event.preventDefault()
     const parsedEventId = Number(effectiveEventId)
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setError({ code: 'INVALID_EVENT_ID', message: '캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setError({ code: 'INVALID_EVENT_ID', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
 
@@ -184,7 +184,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     <section className="panel campaign-monitor" aria-labelledby="campaign-monitor-title">
       <div className="monitor-header">
         <div>
-          <span className="monitor-kicker">REAL-TIME CAMPAIGN WATCH</span>
+          <span className="monitor-kicker">REAL-TIME COUPON WATCH</span>
           <h2 id="campaign-monitor-title">실시간 발급 현황 관제</h2>
           <p>Redis 서버 기준 발급 상태와 재고 변화를 1초 간격으로 조회합니다.</p>
         </div>

@@ -153,18 +153,16 @@
 }
 
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  margin: -38px 0 30px;
-  padding: 18px 0 14px;
+  margin: 8px 0 30px;
+  padding: 18px 22px 16px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 24px;
-  border-bottom: 1px solid rgba(224, 217, 226, 0.82);
-  background: rgba(250, 248, 251, 0.88);
-  box-shadow: 0 10px 24px rgba(47, 31, 46, 0.05);
+  border: 1px solid rgba(224, 217, 226, 0.92);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(47, 31, 46, 0.07);
   backdrop-filter: blur(14px);
 }
 
@@ -261,6 +259,33 @@ h1 {
   box-shadow: var(--shadow-md);
 }
 
+.summary-card.approval-card {
+  border-color: rgba(21, 168, 116, 0.42);
+  background: linear-gradient(135deg, #fff 0%, #f3fcf8 100%);
+}
+
+.summary-card.approval-card strong {
+  color: #087552;
+}
+
+.summary-card.processing-card {
+  border-color: rgba(229, 162, 20, 0.48);
+  background: linear-gradient(135deg, #fff 0%, #fffaf0 100%);
+}
+
+.summary-card.processing-card strong {
+  color: #9b6900;
+}
+
+.summary-card.failure-card {
+  border-color: rgba(217, 38, 84, 0.42);
+  background: linear-gradient(135deg, #fff 0%, #fff5f7 100%);
+}
+
+.summary-card.failure-card strong {
+  color: #b51d45;
+}
+
 .summary-card > span:first-child,
 .summary-card div > span {
   color: var(--muted);
@@ -271,6 +296,11 @@ h1 {
 .summary-card strong {
   font: 800 28px/1 Manrope, sans-serif;
   letter-spacing: -1px;
+}
+
+.summary-card > strong {
+  align-self: flex-end;
+  text-align: right;
 }
 
 .summary-card small {
@@ -304,10 +334,28 @@ h1 {
   font-size: 34px;
 }
 
-.summary-unit {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  font-weight: 700;
+.summary-card.stock-card {
+  color: var(--ink);
+  border-color: rgba(55, 125, 201, 0.42);
+  background: linear-gradient(135deg, #fff 0%, #f2f8ff 100%);
+}
+
+.summary-card.stock-card div {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-card.stock-card strong {
+  align-self: stretch;
+  text-align: right;
+}
+
+.summary-card.stock-card div > span {
+  color: #6d8299;
+}
+
+.summary-card.stock-card strong {
+  color: #2563a8;
 }
 
 .notice {
@@ -2496,8 +2544,9 @@ tbody tr:hover {
   }
 
   .topbar {
-    margin-top: -24px;
-    padding-top: 14px;
+    top: 10px;
+    margin: 0 0 20px;
+    padding: 16px 17px;
     align-items: center;
   }
 

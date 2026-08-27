@@ -194,7 +194,7 @@ function OperationsTab({
     const parsedUserId = Number(retryRecord?.userId ?? userId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
@@ -207,7 +207,7 @@ function OperationsTab({
     if (!targetCampaign) {
       setNotice({
         tone: 'danger',
-        message: '최근 발급 회차에서 쿠폰을 발급할 캠페인을 선택하세요.',
+        message: '최근 발급 회차에서 쿠폰을 발급할 쿠폰을 선택하세요.',
       })
       return
     }
@@ -217,7 +217,7 @@ function OperationsTab({
       if (stats.status !== 'OPEN') {
         setNotice({
           tone: 'danger',
-          message: `캠페인 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 캠페인만 발급할 수 있습니다.`,
+          message: `쿠폰 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
         })
         return
       }
@@ -226,7 +226,7 @@ function OperationsTab({
       setNotice({
         tone: 'danger',
         message: apiError.code === 'EVENT_STATS_TEMPORARILY_UNAVAILABLE'
-          ? 'Redis에 초기화되지 않은 캠페인입니다. 캠페인 관리에서 새 이벤트를 생성하세요.'
+          ? 'Redis에 초기화되지 않은 쿠폰입니다. 쿠폰 관리에서 새 이벤트를 생성하세요.'
           : errorLabels[apiError.code] ?? apiError.message,
       })
       return
@@ -456,27 +456,23 @@ function OperationsTab({
     return (
       <>
         <section className="summary-grid" aria-label="발급 현황 요약">
-          <article className="summary-card accent-card">
+          <article className="summary-card accent-card stock-card">
             <div>
               <span>최근 확인 잔여 수량</span>
               <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
             </div>
-            <span className="summary-unit">장</span>
           </article>
-          <article className="summary-card">
+          <article className="summary-card approval-card">
             <span>발급 판정 승인</span>
             <strong>{summary.accepted.toLocaleString()}</strong>
-            <small>Redis 원자적 판정 통과</small>
           </article>
-          <article className="summary-card">
+          <article className="summary-card processing-card">
             <span>처리 중</span>
             <strong>{summary.processing.toLocaleString()}</strong>
-            <small>3초 간격 자동 조회</small>
           </article>
-          <article className="summary-card">
+          <article className="summary-card failure-card">
             <span>실패 · 원복</span>
             <strong>{summary.failed.toLocaleString()}</strong>
-            <small>확인이 필요한 요청</small>
           </article>
         </section>
         <CampaignMonitor
@@ -496,7 +492,6 @@ function OperationsTab({
               <span className="section-number">01</span>
               <h2>쿠폰 발급</h2>
             </div>
-            <span className="api-chip">POST · /api/v1/events/{'{eventId}'}/issues</span>
           </div>
 
           <button
@@ -524,7 +519,7 @@ function OperationsTab({
             }}
           >
             <label>
-              캠페인 ID
+              쿠폰 ID
               <input
                 type="number"
                 min="1"
@@ -532,7 +527,7 @@ function OperationsTab({
                 value={eventId}
                 readOnly
                 aria-readonly="true"
-                placeholder="캠페인 생성 후 자동 입력"
+                placeholder="쿠폰 생성 후 자동 입력"
               />
             </label>
             <label>
@@ -556,7 +551,7 @@ function OperationsTab({
             </button>
           </form>
           <p className="form-help">
-            위 쿠폰 이미지를 눌러 최근 발급 회차를 선택하면 캠페인 ID가 자동으로 고정됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
+            위 쿠폰 이미지를 눌러 최근 발급 회차를 선택하면 쿠폰 ID가 자동으로 고정됩니다. 새 요청에는 UUID 멱등성 키가 자동으로 생성됩니다.
           </p>
         </article>
 
@@ -589,7 +584,7 @@ function OperationsTab({
               className={historyScope === 'current' ? 'selected' : ''}
               onClick={() => setHistoryScope('current')}
             >
-              현재 캠페인
+              현재 쿠폰
               <span>{currentCampaignRecords.length.toLocaleString()}</span>
             </button>
           </div>
@@ -598,7 +593,7 @@ function OperationsTab({
               <thead>
                 <tr>
                   <th>사용자</th>
-                  <th>캠페인</th>
+                  <th>쿠폰</th>
                   <th>순번</th>
                   <th>상태</th>
                   <th>요청 시각</th>
@@ -620,7 +615,7 @@ function OperationsTab({
                   <tr>
                     <td colSpan="5" className="table-empty">
                       {historyScope === 'current'
-                        ? '현재 캠페인의 API 응답 이력이 없습니다.'
+                        ? '현재 쿠폰의 API 응답 이력이 없습니다.'
                         : 'API 응답 이력이 없습니다.'}
                     </td>
                   </tr>
@@ -638,7 +633,7 @@ function OperationsTab({
               <h2>쿠폰 상태 이력</h2>
             </div>
             <span className="api-chip subtle">
-              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '캠페인 선택 대기'}
+              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
             </span>
           </div>
           {redisDecisionHistory.length > 0 || campaignHasStarted || campaignHasClosed ? (
@@ -652,7 +647,7 @@ function OperationsTab({
                       <time>{formatDate(selectedIssueCampaign.statusChangedAt ?? selectedIssueCampaign.closeAt)}</time>
                     </div>
                     <p>
-                      {campaignLabel(selectedIssueCampaign)} · 예약 마감 또는 관리자 수동 마감으로 발급 종료
+                      {campaignLabel(selectedIssueCampaign)} · 예약 마감 또는 관리자 수동 마감으로 쿠폰 발급 종료
                     </p>
                   </div>
                 </li>
@@ -680,7 +675,7 @@ function OperationsTab({
                       <time>{formatDate(selectedIssueCampaign.openAt)}</time>
                     </div>
                     <p>
-                      {campaignLabel(selectedIssueCampaign)} · 초기 재고 {selectedIssueCampaign.totalStock?.toLocaleString() ?? '-'}장
+                      {campaignLabel(selectedIssueCampaign)} · 쿠폰 초기 재고 {selectedIssueCampaign.totalStock?.toLocaleString() ?? '-'}장
                     </p>
                   </div>
                 </li>
@@ -689,7 +684,7 @@ function OperationsTab({
           ) : (
             <div className="empty-state small">
               <strong>표시할 상태 변경이 없습니다</strong>
-              <p>현재 캠페인의 Redis 발급 판정 승인이 발급 순번순으로 표시됩니다.</p>
+              <p>현재 쿠폰의 Redis 발급 판정 승인이 발급 순번순으로 표시됩니다.</p>
             </div>
           )}
         </article>
@@ -706,7 +701,7 @@ function OperationsTab({
           <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="issue-campaign-picker-title">
             <div className="coupon-picker-header">
               <div>
-                <span className="eyebrow">ISSUE CAMPAIGN SELECT</span>
+                <span className="eyebrow">ISSUE COUPON SELECT</span>
                 <h2 id="issue-campaign-picker-title">발급할 쿠폰 선택</h2>
                 <p>최근 생성된 발급 회차 5개 중 쿠폰을 발급할 회차를 선택하세요.</p>
               </div>
@@ -738,7 +733,7 @@ function OperationsTab({
                 ))}
               </div>
             ) : (
-              <p className="catalog-empty">선택할 발급 회차가 없습니다. 먼저 캠페인을 생성하세요.</p>
+              <p className="catalog-empty">선택할 발급 회차가 없습니다. 먼저 쿠폰을 생성하세요.</p>
             )}
             <button type="button" className="coupon-picker-cancel" onClick={() => setIssueCampaignPickerOpen(false)}>닫기</button>
           </section>

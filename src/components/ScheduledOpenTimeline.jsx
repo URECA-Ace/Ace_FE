@@ -15,7 +15,7 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
           <strong id="campaign-schedule-title">예약 오픈 일정 · 상태 관리</strong>
           <small>최근 발급 회차의 일정과 현재 상태를 한곳에서 관리합니다.</small>
         </div>
-        <span>RECENT CAMPAIGNS</span>
+        <span>RECENT COUPONS</span>
       </div>
 
       {campaigns.length > 0 ? (

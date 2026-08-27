@@ -248,7 +248,7 @@ function CampaignManagementTab({
     const parsedEventId = Number(initializationEventId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '초기화할 캠페인 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '초기화할 쿠폰 ID는 1 이상의 정수여야 합니다.' })
       return
     }
 
@@ -267,7 +267,7 @@ function CampaignManagementTab({
       setLoadEventId(String(data.eventId))
       setNotice({
         tone: 'success',
-        message: `캠페인 ${data.eventId}번 Redis 초기화 결과: ${data.result}`,
+        message: `쿠폰 ${data.eventId}번 Redis 초기화 결과: ${data.result}`,
       })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -319,7 +319,7 @@ function CampaignManagementTab({
       setNotice({
         tone: 'success',
         toast: true,
-        message: `${campaign.couponName} ${campaign.round}회차를 마감했습니다.`,
+        message: `${campaign.couponName} ${campaign.round}회차 쿠폰을 마감했습니다.`,
       })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -334,7 +334,7 @@ function CampaignManagementTab({
       <section className="campaign-management" aria-labelledby="campaign-management-title">
         <div className="tab-heading">
           <div>
-            <span className="eyebrow">CAMPAIGN MANAGEMENT</span>
+            <span className="eyebrow">COUPON MANAGEMENT</span>
             <h2 id="campaign-management-title">쿠폰 이벤트와 예약 오픈 관리</h2>
             <p>쿠폰을 발급할 이벤트를 만들고, 오픈 및 마감 일정을 관리합니다.</p>
           </div>
@@ -363,7 +363,6 @@ function CampaignManagementTab({
               <h2 id="coupon-create-title">쿠폰 상품 생성</h2>
               <p className="panel-description">발급할 쿠폰의 기본 정보와 혜택을 먼저 등록합니다.</p>
             </div>
-            <span className="api-chip">POST · /api/v1/coupons</span>
           </div>
           <form className="event-create-form coupon-product-form" onSubmit={createCouponProduct}>
             <label>
@@ -410,7 +409,6 @@ function CampaignManagementTab({
               <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
               <p className="panel-description">쿠폰을 선택하고 재고와 발급 시작 방식을 설정해 회차를 만듭니다.</p>
             </div>
-            <span className="api-chip">POST · /api/v1/coupons/{'{couponId}'}/events</span>
           </div>
           <div className="coupon-catalog" aria-labelledby="coupon-catalog-title">
             <div className="catalog-heading">
@@ -515,21 +513,20 @@ function CampaignManagementTab({
           <div className="panel-heading">
             <div>
               <span className="section-number">02</span>
-              <h2 id="campaign-initialization-title">Redis 캠페인 초기화 복구 · 장애 대응 전용</h2>
+              <h2 id="campaign-initialization-title">Redis 쿠폰 초기화 복구 · 장애 대응 전용</h2>
             </div>
-            <span className="api-chip">POST · /internal/campaigns/{'{eventId}'}/init</span>
           </div>
           <div className="initialization-layout">
             <div className="initialization-copy">
               <strong>일반 발급에서는 실행하지 않습니다.</strong>
               <p>
-                위의 캠페인 생성 API가 DB 저장과 Redis 초기화를 함께 처리합니다.
+                위의 쿠폰 생성 기능이 DB 저장과 Redis 초기화를 함께 처리합니다.
                 이 기능은 생성 응답이 초기화 실패로 끝난 경우에만 사용합니다.
                 백엔드에서 <code>coupon.issue.admin.enabled=true</code>로 노출한 시연 환경에서만 동작합니다.
               </p>
             </div>
             <form className="initialization-form" onSubmit={initializeEvent}>
-              <label>초기화할 캠페인</label>
+              <label>초기화할 쿠폰</label>
               <div>
                 <button
                   type="button"
@@ -634,11 +631,11 @@ function CampaignManagementTab({
           <section className="coupon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="campaign-picker-title">
             <div className="coupon-picker-header">
               <div>
-                <span className="eyebrow">CAMPAIGN SELECT</span>
-                <h2 id="campaign-picker-title">초기화할 캠페인 선택</h2>
+                <span className="eyebrow">COUPON SELECT</span>
+                <h2 id="campaign-picker-title">초기화할 쿠폰 선택</h2>
                 <p>최근 생성한 발급 회차를 선택한 뒤 Redis 재초기화를 실행하세요.</p>
               </div>
-              <button type="button" className="coupon-picker-close" onClick={() => setCampaignPickerOpen(false)} aria-label="캠페인 선택 창 닫기">×</button>
+              <button type="button" className="coupon-picker-close" onClick={() => setCampaignPickerOpen(false)} aria-label="쿠폰 선택 창 닫기">×</button>
             </div>
             {campaignCandidates.length > 0 ? (
               <div className="coupon-catalog-list coupon-picker-list">
@@ -661,7 +658,7 @@ function CampaignManagementTab({
                 ))}
               </div>
             ) : (
-              <p className="catalog-empty">선택할 캠페인이 없습니다. 먼저 발급 회차를 생성하세요.</p>
+              <p className="catalog-empty">선택할 쿠폰이 없습니다. 먼저 발급 회차를 생성하세요.</p>
             )}
             <button type="button" className="coupon-picker-cancel" onClick={() => setCampaignPickerOpen(false)}>닫기</button>
           </section>
