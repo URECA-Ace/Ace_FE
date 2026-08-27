@@ -286,6 +286,15 @@ h1 {
   color: #b51d45;
 }
 
+.summary-card.confirmed-card {
+  border-color: rgba(137, 65, 180, 0.42);
+  background: linear-gradient(135deg, #fff 0%, #faf5ff 100%);
+}
+
+.summary-card.confirmed-card strong {
+  color: #7b2da5;
+}
+
 .summary-card > span:first-child,
 .summary-card div > span {
   color: var(--muted);

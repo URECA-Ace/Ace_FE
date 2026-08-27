@@ -65,7 +65,7 @@ function issueStatusMeta(status) {
   return ISSUE_STATUS[status] ?? { label: status || '상태 확인 필요', tone: 'neutral' }
 }
 
-function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
+function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange }) {
   const defaultEventId = recentCampaigns[0]?.eventId ?? selectedEventId
   const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
   const [monitoredEventId, setMonitoredEventId] = useState(null)
@@ -113,6 +113,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
       ])
       if (signal?.aborted || !monitoringActiveRef.current) return
       setStats(data)
+      onStatsChange?.(data)
       logCursorRef.current = Math.max(logCursorRef.current, logResult.cursor)
       if (logResult.collected.length > 0) {
         setIssuanceLogs((current) => {
@@ -139,11 +140,15 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
         message: ERROR_MESSAGES[apiError.code] ?? apiError.message,
         incidentId: apiError.incidentId,
       })
-      if (apiError.code === 'EVENT_NOT_FOUND') setMonitoredEventId(null)
+      if (apiError.code === 'EVENT_NOT_FOUND') {
+        setStats(null)
+        onStatsChange?.(null)
+        setMonitoredEventId(null)
+      }
     } finally {
       if (!signal?.aborted && monitoringActiveRef.current) setLoading(false)
     }
-  }, [])
+  }, [onStatsChange])
 
   useEffect(() => {
     if (!monitoredEventId) return undefined
@@ -198,6 +203,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     requestInFlightRef.current = false
     setMonitoredEventId(null)
     setStats(null)
+    onStatsChange?.(null)
     setIssuanceLogs([])
     logCursorRef.current = 0
     setError(null)
@@ -219,6 +225,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     }
 
     setStats(null)
+    onStatsChange?.(null)
     setIssuanceLogs([])
     logCursorRef.current = 0
     setError(null)

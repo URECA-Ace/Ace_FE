@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
 
@@ -88,6 +88,7 @@ function OperationsTab({
   const [issueCampaignPickerOpen, setIssueCampaignPickerOpen] = useState(false)
   const [historyScope, setHistoryScope] = useState('current')
   const [userSearch, setUserSearch] = useState('')
+  const [monitorStats, setMonitorStats] = useState(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedIssueCampaign = recentCampaigns.find(
@@ -190,22 +191,6 @@ function OperationsTab({
       controller.abort()
     }
   }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId, updateRecords])
-
-  const summary = useMemo(() => {
-    const accepted = records.filter((record) =>
-      ['ACCEPTED', 'ISSUED'].includes(record.status),
-    ).length
-    const processing = records.filter((record) =>
-      record.status === 'PROCESSING',
-    ).length
-    const failed = records.filter((record) =>
-      ['FAILED', 'COMPENSATED', 'REJECTED_DUPLICATE', 'REQUEST_FAILED'].includes(record.status),
-    ).length
-    const latestStock = records.find(
-      (record) => record.remainingStock !== null && record.remainingStock !== undefined,
-    )?.remainingStock
-    return { accepted, processing, failed, latestStock }
-  }, [records])
 
   async function requestIssue({ retryRecord } = {}) {
     const parsedEventId = Number(retryRecord?.eventId ?? eventId)
@@ -531,25 +516,26 @@ function OperationsTab({
           <article className="summary-card accent-card stock-card">
             <div>
               <span>최근 확인 잔여 수량</span>
-              <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
+              <strong>{monitorStats?.remainingStock?.toLocaleString() ?? '-'}</strong>
             </div>
           </article>
           <article className="summary-card approval-card">
             <span>발급 판정 승인</span>
-            <strong>{summary.accepted.toLocaleString()}</strong>
+            <strong>{monitorStats?.allocatedQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
           <article className="summary-card processing-card">
             <span>처리 중</span>
-            <strong>{summary.processing.toLocaleString()}</strong>
+            <strong>{monitorStats?.pendingQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
-          <article className="summary-card failure-card">
-            <span>실패 · 원복</span>
-            <strong>{summary.failed.toLocaleString()}</strong>
+          <article className="summary-card confirmed-card">
+            <span>DB 발급 확정</span>
+            <strong>{monitorStats?.confirmedQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
         </section>
         <CampaignMonitor
           selectedEventId={operationCampaign?.eventId}
           recentCampaigns={recentCampaigns}
+          onStatsChange={setMonitorStats}
         />
       </>
     )
