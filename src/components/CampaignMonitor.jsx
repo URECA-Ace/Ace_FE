@@ -59,7 +59,7 @@ function formatObservedAt(value) {
 
 function campaignLabel(campaign) {
   if (!campaign) return '발급 회차를 선택하세요'
-  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차(${campaign.eventId})`
+  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차`
 }
 
 function issueStatusMeta(status) {
@@ -221,7 +221,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
     event.preventDefault()
     const parsedEventId = Number(effectiveEventId)
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setError({ code: 'INVALID_EVENT_ID', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setError({ code: 'INVALID_CAMPAIGN', message: '선택한 발급 회차가 올바르지 않습니다.' })
       return
     }
 

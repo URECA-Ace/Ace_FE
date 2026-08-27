@@ -130,10 +130,9 @@ function OperationsTab({
   }
 
   const visibleUserRecords = userSearch.trim()
-    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE' && (
-        String(record.userId).includes(userSearch.trim())
-        || recordCampaignLabel(record, recentCampaigns).toLowerCase().includes(userSearch.trim().toLowerCase())
-      ))
+    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE'
+        && recordCampaignLabel(record, recentCampaigns).toLowerCase()
+          .includes(userSearch.trim().toLowerCase()))
     : records.filter((record) => record.status !== 'REJECTED_DUPLICATE')
 
   useEffect(() => {
@@ -197,11 +196,11 @@ function OperationsTab({
     const parsedUserId = Number(retryRecord?.userId ?? userId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '선택한 발급 회차가 올바르지 않습니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
-      setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '발급 사용자 키는 1 이상의 정수여야 합니다.' })
       return
     }
     const targetCampaign = recentCampaigns.find(
@@ -220,7 +219,7 @@ function OperationsTab({
       if (stats.status !== 'OPEN') {
         setNotice({
           tone: 'danger',
-          message: `쿠폰 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
+          message: `선택한 쿠폰은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
         })
         return
       }
@@ -296,7 +295,7 @@ function OperationsTab({
             : record,
         ),
       )
-      setNotice({ tone: 'success', message: `사용자 ${parsedUserId}의 발급 요청이 승인되었습니다.` })
+      setNotice({ tone: 'success', message: '사용자의 발급 요청이 승인되었습니다.' })
       if (!retryRecord) setUserId('')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -380,7 +379,7 @@ function OperationsTab({
                   type="search"
                   value={userSearch}
                   onChange={(event) => setUserSearch(event.target.value)}
-                  placeholder="사용자 ID 또는 발급 회차"
+                  placeholder="발급 회차 검색"
                 />
               </label>
               {visibleUserRecords.length > 0 ? (
@@ -394,9 +393,9 @@ function OperationsTab({
                       className={record.id === selected?.id ? 'selected' : ''}
                       onClick={() => setSelectedId(record.id)}
                     >
-                      <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
+                      <span className="user-list-avatar">U+</span>
                       <span className="user-list-copy">
-                        <strong>사용자 #{record.userId}</strong>
+                        <strong>발급 사용자</strong>
                         <small>{recordCampaignLabel(record, recentCampaigns)}</small>
                       </span>
                       <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
@@ -414,10 +413,10 @@ function OperationsTab({
               <aside className="user-detail-panel" aria-labelledby="selected-user-title">
                 <div className="user-detail-heading">
                   <div className="user-identity">
-                    <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
+                    <span className="user-avatar">U+</span>
                     <div>
                       <span className="user-detail-kicker">SELECTED USER</span>
-                      <strong id="selected-user-title">사용자 #{selected.userId}</strong>
+                      <strong id="selected-user-title">발급 사용자</strong>
                       <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
                     </div>
                   </div>
@@ -585,11 +584,12 @@ function OperationsTab({
                 }}
               >
                 <label>
-                  사용자 ID
+                  발급 사용자 키
                   <input
-                    type="number"
-                    min="1"
-                    step="1"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]+"
+                    autoComplete="off"
                     value={userId}
                     onChange={(event) => setUserId(event.target.value)}
                     placeholder="예: 10001"
@@ -660,7 +660,7 @@ function OperationsTab({
                   const meta = statusMeta(record.status)
                   return (
                     <tr key={record.id} onClick={() => setSelectedId(record.id)}>
-                      <td><strong>#{record.userId}</strong></td>
+                      <td><strong>발급 사용자</strong></td>
                       <td>{recordCampaignLabel(record, recentCampaigns)}</td>
                       <td>{record.issueSequence ?? '-'}</td>
                       <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
@@ -713,7 +713,7 @@ function OperationsTab({
                   <span className="timeline-dot" />
                   <div>
                     <div className="timeline-title">
-                      <strong>중복 발급 차단 · 사용자 {record.userId}</strong>
+                      <strong>중복 발급 차단</strong>
                       <time>{formatDate(record.lastCheckedAt)}</time>
                     </div>
                     <p>이미 발급 완료된 사용자에게 중복 발급 요청이 있었습니다.</p>
@@ -728,7 +728,7 @@ function OperationsTab({
                       <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
                     </div>
                     <p>
-                      사용자({record.userId}) · 발급 순번({record.issueSequence}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      발급 순번({record.issueSequence}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
                     </p>
                   </div>
                 </li>
