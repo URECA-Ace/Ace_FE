@@ -1539,6 +1539,162 @@ h1 {
   font-size: 7px;
 }
 
+.issuance-log-panel {
+  margin: 0 24px 20px;
+  border: 1px solid #e6e1e8;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.issuance-log-header {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #eeeaf0;
+}
+
+.issuance-log-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #0b8f67;
+  font: 800 7px/1 Manrope, sans-serif;
+  letter-spacing: 1.2px;
+}
+
+.issuance-log-header h3 {
+  margin: 0 0 4px;
+  color: #39313b;
+  font-size: 13px;
+}
+
+.issuance-log-header p {
+  margin: 0;
+  color: #938b96;
+  font-size: 8px;
+}
+
+.issuance-log-summary {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.issuance-log-summary span,
+.issuance-log-summary small {
+  display: block;
+}
+
+.issuance-log-summary span {
+  color: #087552;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.issuance-log-summary small {
+  margin-top: 4px;
+  color: #aaa2ad;
+  font-size: 7px;
+}
+
+.issuance-log-columns,
+.issuance-log-list li {
+  display: grid;
+  grid-template-columns: 100px minmax(120px, 1fr) 110px;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.issuance-log-columns {
+  height: 28px;
+  padding: 0 18px;
+  color: #9d96a0;
+  background: #f8f6f9;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.issuance-log-list {
+  --issuance-log-row-height: 34px;
+  max-height: calc(var(--issuance-log-row-height) * 20);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.issuance-log-list li {
+  height: var(--issuance-log-row-height);
+  padding: 0 18px;
+  border-bottom: 1px solid #f1eef2;
+  color: #625a65;
+  font: 700 8px/1 Manrope, sans-serif;
+  animation: issuance-log-enter 180ms ease-out;
+}
+
+.issuance-log-list li:last-child {
+  border-bottom: 0;
+}
+
+.issuance-log-list li strong {
+  color: var(--magenta-dark);
+  font-size: 9px;
+}
+
+.issuance-log-list li span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.issuance-log-list li i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #13a978;
+  box-shadow: 0 0 0 3px rgba(19, 169, 120, 0.1);
+}
+
+.issuance-log-list li time {
+  color: #8f8792;
+  text-align: right;
+}
+
+.issuance-log-empty {
+  min-height: 96px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  color: #a39ca6;
+  text-align: center;
+}
+
+.issuance-log-empty strong {
+  color: #69616b;
+  font-size: 9px;
+}
+
+.issuance-log-empty span {
+  font-size: 8px;
+}
+
+@keyframes issuance-log-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .monitor-error {
   margin: 0 24px 20px;
   padding: 10px 12px;
@@ -2989,6 +3145,24 @@ tbody tr:hover {
     margin-inline: 16px;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .issuance-log-panel {
+    margin-inline: 16px;
+  }
+
+  .issuance-log-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .issuance-log-summary {
+    text-align: left;
+  }
+
+  .issuance-log-columns,
+  .issuance-log-list li {
+    grid-template-columns: 78px minmax(100px, 1fr) 92px;
   }
 
   .monitor-error small {

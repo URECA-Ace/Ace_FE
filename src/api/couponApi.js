@@ -78,6 +78,19 @@ export function getIssuanceStats(eventId, signal) {
   })
 }
 
+export function getIssuanceLogs(eventId, afterSequence, size, signal) {
+  const query = new URLSearchParams({
+    afterSequence: String(afterSequence),
+    size: String(size),
+  })
+  return request(`/api/v1/events/${eventId}/issuance-logs?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function createCoupon(payload, signal) {
   return request('/api/v1/coupons', {
     method: 'POST',

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getIssuanceStats } from '../api/couponApi'
+import { ApiError, getIssuanceLogs, getIssuanceStats } from '../api/couponApi'
 
 const POLLING_INTERVAL_MS = 1000
+const LOG_PAGE_SIZE = 500
+const MAX_LOG_PAGES_PER_POLL = 4
+const MAX_VISIBLE_LOGS = 500
+const LOG_CURSOR_OVERLAP = 500
 
 const CAMPAIGN_STATUS = {
   SCHEDULED: {
@@ -56,23 +60,65 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
   const [eventId, setEventId] = useState(() => String(defaultEventId ?? ''))
   const [monitoredEventId, setMonitoredEventId] = useState(null)
   const [stats, setStats] = useState(null)
+  const [issuanceLogs, setIssuanceLogs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const pollingControllerRef = useRef(null)
   const pollingIntervalRef = useRef(null)
   const monitoringActiveRef = useRef(false)
   const requestInFlightRef = useRef(false)
+  const logCursorRef = useRef(0)
+  const logListRef = useRef(null)
+  const followLatestLogRef = useRef(true)
   const polling = monitoredEventId !== null
   const effectiveEventId = recentCampaigns.some(
     (campaign) => String(campaign.eventId) === String(eventId),
   ) ? eventId : String(defaultEventId ?? '')
 
-  const readStats = useCallback(async (targetEventId, signal) => {
+  const readMonitorSnapshot = useCallback(async (targetEventId, signal) => {
     setLoading(true)
     try {
-      const data = await getIssuanceStats(targetEventId, signal)
+      const readLogPages = async () => {
+        // 여러 릴레이 인스턴스의 DB 커밋 순서는 Redis 발급 순번과 다를 수 있다.
+        // 최근 구간을 겹쳐 읽고 아래에서 순번으로 중복 제거해 늦은 커밋을 다시 포착한다.
+        let cursor = Math.max(0, logCursorRef.current - LOG_CURSOR_OVERLAP)
+        const collected = []
+
+        for (let page = 0; page < MAX_LOG_PAGES_PER_POLL; page += 1) {
+          const response = await getIssuanceLogs(
+            targetEventId,
+            cursor,
+            LOG_PAGE_SIZE,
+            signal,
+          )
+          collected.push(...response.logs)
+          cursor = response.nextSequence
+          if (!response.hasMore || signal?.aborted) break
+        }
+
+        return { collected, cursor }
+      }
+
+      const [data, logResult] = await Promise.all([
+        getIssuanceStats(targetEventId, signal),
+        readLogPages(),
+      ])
       if (signal?.aborted || !monitoringActiveRef.current) return
       setStats(data)
+      logCursorRef.current = Math.max(logCursorRef.current, logResult.cursor)
+      if (logResult.collected.length > 0) {
+        setIssuanceLogs((current) => {
+          const uniqueBySequence = new Map(
+            current.map((log) => [log.issueSequence, log]),
+          )
+          logResult.collected.forEach((log) => {
+            uniqueBySequence.set(log.issueSequence, log)
+          })
+          return [...uniqueBySequence.values()]
+            .sort((left, right) => left.issueSequence - right.issueSequence)
+            .slice(-MAX_VISIBLE_LOGS)
+        })
+      }
       setError(null)
 
     } catch (requestError) {
@@ -107,7 +153,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
       ) return
       requestInFlightRef.current = true
       try {
-        await readStats(monitoredEventId, controller.signal)
+        await readMonitorSnapshot(monitoredEventId, controller.signal)
       } finally {
         requestInFlightRef.current = false
       }
@@ -128,7 +174,12 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
         pollingIntervalRef.current = null
       }
     }
-  }, [monitoredEventId, readStats])
+  }, [monitoredEventId, readMonitorSnapshot])
+
+  useEffect(() => {
+    if (!followLatestLogRef.current || !logListRef.current) return
+    logListRef.current.scrollTop = logListRef.current.scrollHeight
+  }, [issuanceLogs])
 
   useEffect(() => () => {
     monitoringActiveRef.current = false
@@ -144,6 +195,9 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     requestInFlightRef.current = false
     setMonitoredEventId(null)
     setStats(null)
+    setIssuanceLogs([])
+    logCursorRef.current = 0
+    followLatestLogRef.current = true
     setError(null)
     pollingControllerRef.current?.abort()
     pollingControllerRef.current = null
@@ -163,6 +217,9 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
     }
 
     setStats(null)
+    setIssuanceLogs([])
+    logCursorRef.current = 0
+    followLatestLogRef.current = true
     setError(null)
     setMonitoredEventId(parsedEventId)
   }
@@ -274,6 +331,55 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [] }) {
           <p>배정 수량은 Redis 재고 차감 기준이며 MySQL 최종 저장 건수와 구분됩니다.</p>
         </div>
 
+      </div>
+
+      <div className="issuance-log-panel">
+        <div className="issuance-log-header">
+          <div>
+            <span className="issuance-log-kicker">MYSQL CONFIRMED STREAM</span>
+            <h3>DB 발급 확정 로그</h3>
+            <p>Redis 판정을 통과한 뒤 MySQL 저장까지 완료된 사용자와 선착순 순번입니다.</p>
+          </div>
+          <div className="issuance-log-summary">
+            <span>{visibleStats?.confirmedQuantity?.toLocaleString() ?? 0}건 확정</span>
+            <small>최근 {MAX_VISIBLE_LOGS.toLocaleString()}건 표시</small>
+          </div>
+        </div>
+
+        <div className="issuance-log-columns" aria-hidden="true">
+          <span>발급 순번</span>
+          <span>사용자</span>
+          <span>DB 확정 시각</span>
+        </div>
+
+        {issuanceLogs.length > 0 ? (
+          <ol
+            className="issuance-log-list"
+            ref={logListRef}
+            aria-label="실시간 DB 발급 확정 로그"
+            aria-live="polite"
+            onScroll={(event) => {
+              const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+              followLatestLogRef.current = scrollHeight - scrollTop - clientHeight < 24
+            }}
+          >
+            {issuanceLogs.map((log) => (
+              <li key={log.issueSequence}>
+                <strong>#{log.issueSequence.toLocaleString()}</strong>
+                <span>
+                  <i aria-hidden="true" />
+                  USER {log.userId.toLocaleString()}
+                </span>
+                <time dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="issuance-log-empty">
+            <strong>{polling ? '발급 확정 로그를 기다리는 중입니다.' : '실시간 관제를 시작해 주세요.'}</strong>
+            <span>부하 테스트가 시작되면 DB 저장이 완료된 순서대로 이곳에 추가됩니다.</span>
+          </div>
+        )}
       </div>
 
       {error && (
