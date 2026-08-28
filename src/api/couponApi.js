@@ -15,7 +15,8 @@ async function request(path, options) {
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, options)
-  } catch {
+  } catch (error) {
+    if (error.name === 'AbortError') throw error
     throw new ApiError('NETWORK_ERROR', '백엔드 서버에 연결할 수 없습니다.')
   }
 
@@ -157,6 +158,88 @@ export function initializeCampaign(eventId, signal) {
   })
 }
 
+export function verifyAllConsistency(signal) {
+  return request('/internal/consistency/verify', {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getConsistencyChecks(scopeType, signal) {
+  const query = new URLSearchParams({ scopeType })
+  return request(`/api/v1/consistency/checks?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function verifyConsistency(payload, signal) {
+  return request('/api/v1/consistency/verifications', {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getConsistencyResults({ status, page = 0, size = 100 } = {}, signal) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  if (status) query.set('status', status)
+  return request(`/api/v1/consistency/results?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getConsistencyViolations(resultId, page = 0, size = 20, signal) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  return request(`/api/v1/consistency/results/${resultId}/violations?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getConsistencyRecoveryMethods(resultId, signal) {
+  return request(`/api/v1/consistency/results/${resultId}/recovery-methods`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function recoverConsistency(resultId, action, signal) {
+  return request(`/api/v1/consistency/results/${resultId}/recoveries`, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ action }),
+  })
+}
+
+export function getConsistencyRecoveries(page = 0, size = 100, signal) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  return request(`/api/v1/consistency/recoveries?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function getCouponIssueId(eventId, userId, signal) {
   return request(`/api/v1/coupons/issues/lookup?eventId=${eventId}&userId=${userId}`, {
     method: 'GET',
@@ -180,6 +263,19 @@ export function useCoupon(issueId, userId, idempotencyKey, reason, signal) {
 
 export function cancelCoupon(issueId, userId, idempotencyKey, reason, signal) {
   return request(`/api/v1/coupons/${issueId}/cancel`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
+  })
+}
+
+export function expireCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/expire`, {
     method: 'PATCH',
     signal,
     headers: {
