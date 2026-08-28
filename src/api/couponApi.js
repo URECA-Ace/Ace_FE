@@ -263,3 +263,16 @@ export function cancelCoupon(issueId, userId, idempotencyKey, reason, signal) {
     body: JSON.stringify({ userId, reason }),
   })
 }
+
+export function expireCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/expire`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
+  })
+}

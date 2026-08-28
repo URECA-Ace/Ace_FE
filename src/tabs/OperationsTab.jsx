@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId } from '../api/couponApi'
+import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId, expireCoupon as requestCouponExpire } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
 import GrafanaMetricCard from '../components/GrafanaMetricCard'
 import { loadRecords, saveRecords } from '../utils/issueRecords'
@@ -520,15 +520,29 @@ function OperationsTab({
     setSubmitting(true)
     setNotice(null)
     try {
+      let realIssueId = targetRecord.issueId
+      if (!realIssueId && targetRecord.eventId && targetRecord.userId) {
+        const lookup = await getCouponIssueId(targetRecord.eventId, targetRecord.userId)
+        realIssueId = lookup.issueId
+      }
+      if (!realIssueId) {
+        setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
+        return
+      }
+
+      const idempotencyKey = crypto.randomUUID()
+      const data = await requestCouponExpire(realIssueId, targetRecord.userId, idempotencyKey, 'MANUAL_EXPIRED')
+
       updateRecords((current) =>
         current.map((record) =>
           record.id === targetRecord.id
             ? {
                 ...record,
-                status: 'EXPIRED',
+                issueId: realIssueId,
+                status: data.currentStatus,
                 lastCheckedAt: new Date().toISOString(),
                 events: [
-                  eventItem('EXPIRED', '쿠폰 수동 만료', '시연용 수동 만료 처리가 완료되었습니다.', 'danger'),
+                  eventItem('EXPIRED', '쿠폰 수동 만료', '수동 만료 처리가 완료되었습니다.', 'danger'),
                   ...record.events,
                 ],
               }
@@ -536,6 +550,9 @@ function OperationsTab({
         ),
       )
       setNotice({ tone: 'success', message: '쿠폰이 만료 처리되었습니다.' })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
     } finally {
       setSubmitting(false)
       setExpireConfirmRecord(null)
