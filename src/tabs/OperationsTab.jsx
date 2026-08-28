@@ -1083,7 +1083,7 @@ function OperationsTab({
                           )).reverse().map((event) => (
                             <li
                               key={event.id}
-                              className={event.title === '쿠폰 사용 처리'
+                              className={event.title === '쿠폰 사용 완료'
                                 ? 'used'
                                 : event.title === '쿠폰 사용 취소' ? 'cancelled' : event.tone}
                             >

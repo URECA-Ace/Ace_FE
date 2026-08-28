@@ -34,6 +34,7 @@ const ISSUE_STATUS = {
   PROCESSING: { label: '처리 중', tone: 'waiting' },
   ISSUED: { label: '발급 완료', tone: 'success' },
   USED: { label: '사용 완료', tone: 'success' },
+  EXPIRED: { label: '기간 만료', tone: 'danger' },
   CANCELED: { label: '발급 취소', tone: 'neutral' },
 }
 
