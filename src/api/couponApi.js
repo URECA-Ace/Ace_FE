@@ -156,3 +156,37 @@ export function initializeCampaign(eventId, signal) {
     headers: { Accept: 'application/json' },
   })
 }
+
+export function getCouponIssueId(eventId, userId, signal) {
+  return request(`/api/v1/coupons/issues/lookup?eventId=${eventId}&userId=${userId}`, {
+    method: 'GET',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function useCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/use`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
+  })
+}
+
+export function cancelCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/cancel`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
+  })
+}
