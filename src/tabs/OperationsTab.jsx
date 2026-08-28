@@ -123,6 +123,7 @@ function OperationsTab({
   const [historyScope, setHistoryScope] = useState('current')
   const [userSearch, setUserSearch] = useState('')
   const [monitorStats, setMonitorStats] = useState(null)
+  const [expireConfirmRecord, setExpireConfirmRecord] = useState(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedIssueCampaign = recentCampaigns.find(
@@ -415,14 +416,14 @@ function OperationsTab({
                 status: data.currentStatus,
                 lastCheckedAt: new Date().toISOString(),
                 events: [
-                  eventItem('STATE_CHANGE', '쿠폰 사용 처리', `${data.previousStatus} → ${data.currentStatus}`, 'success'),
+                  eventItem('STATE_CHANGE', '쿠폰 사용 완료', '쿠폰 사용 처리가 완료되었습니다.', 'success'),
                   ...record.events,
                 ],
               }
             : record,
         ),
       )
-      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 처리가 완료되었습니다.` })
+      setNotice({ tone: 'success', message: '쿠폰 사용 처리가 완료되었습니다.' })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
@@ -475,14 +476,14 @@ function OperationsTab({
                 status: data.currentStatus,
                 lastCheckedAt: new Date().toISOString(),
                 events: [
-                  eventItem('STATE_CHANGE', '쿠폰 사용 취소', `${data.previousStatus} → ${data.currentStatus}`, 'waiting'),
+                  eventItem('STATE_CHANGE', '쿠폰 사용 취소', '쿠폰 사용이 취소되어 정상 발급 상태로 원복되었습니다.', 'waiting'),
                   ...record.events,
                 ],
               }
             : record,
         ),
       )
-      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 취소(재사용 원복)가 완료되었습니다.` })
+      setNotice({ tone: 'success', message: '쿠폰 사용 취소(재사용 원복)가 완료되었습니다.' })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
@@ -509,213 +510,279 @@ function OperationsTab({
     }
   }
 
+  function handleExpireCoupon() {
+    if (!selected) return
+    setExpireConfirmRecord(selected)
+  }
+
+  async function executeExpireCoupon(targetRecord) {
+    if (!targetRecord) return
+    setSubmitting(true)
+    setNotice(null)
+    try {
+      updateRecords((current) =>
+        current.map((record) =>
+          record.id === targetRecord.id
+            ? {
+                ...record,
+                status: 'EXPIRED',
+                lastCheckedAt: new Date().toISOString(),
+                events: [
+                  eventItem('EXPIRED', '쿠폰 수동 만료', '시연용 수동 만료 처리가 완료되었습니다.', 'danger'),
+                  ...record.events,
+                ],
+              }
+            : record,
+        ),
+      )
+      setNotice({ tone: 'success', message: '쿠폰이 만료 처리되었습니다.' })
+    } finally {
+      setSubmitting(false)
+      setExpireConfirmRecord(null)
+    }
+  }
+
   const selectedMeta = statusMeta(selected?.status)
 
   const userControlPanel = (
-    <article className="panel user-panel coupon-control-test-panel">
-      <div className="panel-heading">
-        <div>
-          <span className="section-number">02</span>
-          <h2>사용자 쿠폰 제어</h2>
+    <>
+      <article className="panel user-panel coupon-control-test-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="section-number">01</span>
+            <h2>사용자 쿠폰 제어</h2>
+          </div>
         </div>
-      </div>
 
-      {records.length > 0 ? (
-        <>
-          <div className="user-control-layout">
-            <section className="user-directory" aria-labelledby="recent-user-list-title">
-              <div className="user-directory-heading">
-                <div>
-                  <span>RECENT ISSUANCE</span>
-                  <h3 id="recent-user-list-title">최근 발급 사용자</h3>
-                </div>
-                <small>{userSearch.trim() ? `${visibleUserRecords.length}명 검색됨` : `전체 ${records.length}명 · 최신순`}</small>
-              </div>
-              <label className="user-search-field" htmlFor="coupon-user-search">
-                사용자 검색
-                <input
-                  id="coupon-user-search"
-                  type="search"
-                  value={userSearch}
-                  onChange={(event) => setUserSearch(event.target.value)}
-                  placeholder="사용자 ID 또는 발급 회차"
-                />
-              </label>
-              {visibleUserRecords.length > 0 ? (
-                <div className="user-tabs" role="list" aria-label="발급 사용자 목록">
-                  {visibleUserRecords.map((record) => (
-                    <button
-                      key={record.id}
-                      type="button"
-                      role="listitem"
-                      aria-pressed={record.id === selected?.id}
-                      className={record.id === selected?.id ? 'selected' : ''}
-                      onClick={() => setSelectedId(record.id)}
-                    >
-                      <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
-                      <span className="user-list-copy">
-                        <strong>사용자 #{record.userId}</strong>
-                        <small>{recordCampaignLabel(record, recentCampaigns)}</small>
-                      </span>
-                      <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
-                        {statusMeta(record.status).label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="user-search-empty">검색 결과가 없습니다.</div>
-              )}
-            </section>
-
-            {visibleUserRecords.length > 0 && selected && (
-              <aside className="user-detail-panel" aria-labelledby="selected-user-title">
-                <div className="user-detail-heading">
-                  <div className="user-identity">
-                    <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
-                    <div>
-                      <span className="user-detail-kicker">SELECTED USER</span>
-                      <strong id="selected-user-title">사용자 #{selected.userId}</strong>
-                      <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
-                    </div>
+        {records.length > 0 ? (
+          <>
+            <div className="user-control-layout">
+              <section className="user-directory" aria-labelledby="recent-user-list-title">
+                <div className="user-directory-heading">
+                  <div>
+                    <span>RECENT ISSUANCE</span>
+                    <h3 id="recent-user-list-title">최근 발급 사용자</h3>
                   </div>
-                  <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>
+                  <small>{userSearch.trim() ? `${visibleUserRecords.length}명 검색됨` : `전체 ${records.length}명 · 최신순`}</small>
                 </div>
+                <label className="user-search-field" htmlFor="coupon-user-search">
+                  사용자 검색
+                  <input
+                    id="coupon-user-search"
+                    type="search"
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    placeholder="사용자 ID 또는 발급 회차"
+                  />
+                </label>
+                {visibleUserRecords.length > 0 ? (
+                  <div className="user-tabs" role="list" aria-label="발급 사용자 목록">
+                    {visibleUserRecords.map((record) => (
+                      <button
+                        key={record.id}
+                        type="button"
+                        role="listitem"
+                        aria-pressed={record.id === selected?.id}
+                        className={record.id === selected?.id ? 'selected' : ''}
+                        onClick={() => setSelectedId(record.id)}
+                      >
+                        <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
+                        <span className="user-list-copy">
+                          <strong>사용자 #{record.userId}</strong>
+                          <small>{recordCampaignLabel(record, recentCampaigns)}</small>
+                        </span>
+                        <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
+                          {statusMeta(record.status).label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="user-search-empty">검색 결과가 없습니다.</div>
+                )}
+              </section>
+
+              {visibleUserRecords.length > 0 && selected && (
+                <aside className="user-detail-panel" aria-labelledby="selected-user-title">
+                  <div className="user-detail-heading">
+                    <div className="user-identity">
+                      <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
+                      <div>
+                        <span className="user-detail-kicker">SELECTED USER</span>
+                        <strong id="selected-user-title">사용자 #{selected.userId}</strong>
+                        <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
+                      </div>
+                    </div>
+                    <span className={`status-badge ${selectedMeta.tone}`}>{selectedMeta.label}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={refreshSelected}
+                    disabled={!selected.requestId}
+                  >
+                    상태 새로고침
+                  </button>
+
+                  {records.some((record) => (
+                    String(record.eventId) === String(selected.eventId)
+                    && String(record.userId) === String(selected.userId)
+                    && record.status === 'REJECTED_DUPLICATE'
+                  )) && (
+                    <div className="duplicate-notice" role="status">
+                      <strong>중복 발급 요청이 있었습니다.</strong>
+                      <span>이미 발급된 사용자라 추가 발급은 차단되었습니다.</span>
+                    </div>
+                  )}
+
+                  <dl className="user-profile-grid" aria-label="마스킹된 사용자 정보">
+                    <div>
+                      <dt>이름</dt>
+                      <dd>{selected.maskedUserName ?? '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>이메일</dt>
+                      <dd title={selected.maskedUserEmail}>{selected.maskedUserEmail ?? '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>휴대폰 번호</dt>
+                      <dd>{selected.maskedUserPhone ?? '-'}</dd>
+                    </div>
+                  </dl>
+
+                  <dl className="issue-detail-grid">
+              <div>
+                <dt>발급 순번</dt>
+                <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>잔여 수량</dt>
+                <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
+              </div>
+              <div>
+                <dt>요청 ID</dt>
+                <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
+              </div>
+              <div>
+                <dt>최근 확인</dt>
+                <dd>{formatDate(selected.lastCheckedAt)}</dd>
+              </div>
+            </dl>
+
+            {selected.error && (
+              <div className="error-box">
+                <strong>{selected.error.code}</strong>
+                <span>{selected.error.message}</span>
+                {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
+              </div>
+            )}
+
+            <div className="action-area">
+              <div className="action-heading">
+                <strong>쿠폰 상태 제어</strong>
+              </div>
+
+              {selected.events && selected.events.length > 0 && (
+                <ol className="timeline" style={{ margin: '16px 0', padding: 0 }}>
+                  {selected.events.filter(e => e.type === 'STATE_CHANGE' || e.type === 'EXPIRED').map((ev) => (
+                    <li key={ev.id} className={ev.tone}>
+                      <span className="timeline-dot" />
+                      <div>
+                        <div className="timeline-title">
+                          <strong>{ev.title}</strong>
+                          <time>{formatDate(ev.occurredAt)}</time>
+                        </div>
+                        <p>{ev.detail}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="action-buttons">
                 <button
                   type="button"
-                  className="ghost-button"
-                  onClick={refreshSelected}
-                  disabled={!selected.requestId}
+                  onClick={handleUseCoupon}
+                  disabled={submitting || selected?.status !== 'ISSUED'}
+                  title="쿠폰을 사용 완료 상태로 변경합니다."
                 >
-                  상태 새로고침
+                  사용 처리
                 </button>
-
-                {records.some((record) => (
-                  String(record.eventId) === String(selected.eventId)
-                  && String(record.userId) === String(selected.userId)
-                  && record.status === 'REJECTED_DUPLICATE'
-                )) && (
-                  <div className="duplicate-notice" role="status">
-                    <strong>중복 발급 요청이 있었습니다.</strong>
-                    <span>이미 발급된 사용자라 추가 발급은 차단되었습니다.</span>
-                  </div>
-                )}
-
-                <dl className="user-profile-grid" aria-label="마스킹된 사용자 정보">
-                  <div>
-                    <dt>이름</dt>
-                    <dd>{selected.maskedUserName ?? '-'}</dd>
-                  </div>
-                  <div>
-                    <dt>이메일</dt>
-                    <dd title={selected.maskedUserEmail}>{selected.maskedUserEmail ?? '-'}</dd>
-                  </div>
-                  <div>
-                    <dt>휴대폰 번호</dt>
-                    <dd>{selected.maskedUserPhone ?? '-'}</dd>
-                  </div>
-                </dl>
-
-                <dl className="issue-detail-grid">
-            <div>
-              <dt>발급 순번</dt>
-              <dd>{selected.issueSequence?.toLocaleString() ?? '-'}</dd>
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={handleCancelCoupon}
+                  disabled={submitting || selected?.status !== 'USED'}
+                  title="사용된 쿠폰을 다시 발급 완료 상태로 원복합니다."
+                >
+                  사용 취소
+                </button>
+                <button
+                  type="button"
+                  className={`expired-btn ${selected?.status === 'EXPIRED' ? 'active' : ''}`}
+                  onClick={handleExpireCoupon}
+                  disabled={submitting || selected?.status === 'EXPIRED'}
+                  title={selected?.status === 'EXPIRED' ? '유효기간이 만료된 쿠폰입니다.' : '쿠폰을 즉시 만료 상태로 전환합니다.'}
+                >
+                  {selected?.status === 'EXPIRED' ? '기간 만료' : '수동 만료'}
+                </button>
+              </div>
+              {selected.status === 'REQUEST_FAILED' && (
+                <button
+                  type="button"
+                  className="retry-button"
+                  onClick={() => requestIssue({ retryRecord: selected })}
+                  disabled={submitting}
+                >
+                  동일 Idempotency-Key로 재시도
+                </button>
+              )}
             </div>
-            <div>
-              <dt>잔여 수량</dt>
-              <dd>{selected.remainingStock?.toLocaleString() ?? '-'}{selected.remainingStock != null && '장'}</dd>
-            </div>
-            <div>
-              <dt>요청 ID</dt>
-              <dd title={selected.requestId}>{selected.requestId ? `${selected.requestId.slice(0, 8)}…` : '-'}</dd>
-            </div>
-            <div>
-              <dt>최근 확인</dt>
-              <dd>{formatDate(selected.lastCheckedAt)}</dd>
-            </div>
-          </dl>
+                </aside>
+              )}
+              </div>
+          </>
+        ) : (
+          <div className="empty-state">
+            <span>＋</span>
+            <strong>아직 발급 요청이 없습니다</strong>
+            <p>발급 운영에서 사용자 쿠폰을 발급한 뒤 상태 변경 테스트를 진행하세요.</p>
+          </div>
+        )}
+      </article>
 
-          {selected.error && (
-            <div className="error-box">
-              <strong>{selected.error.code}</strong>
-              <span>{selected.error.message}</span>
-              {selected.error.incidentId && <small>Incident ID: {selected.error.incidentId}</small>}
-            </div>
-          )}
-
-          <div className="action-area">
-            <div className="action-heading">
-              <strong>상태 변경 내역</strong>
-              <span>PATCH /api/v1/coupons/{'{issueId}'}/use · cancel</span>
-            </div>
-
-            {selected.events && selected.events.length > 0 && (
-              <ol className="timeline" style={{ margin: '16px 0', padding: 0 }}>
-                {selected.events.filter(e => e.type === 'STATE_CHANGE' || e.type === 'EXPIRED').map((ev) => (
-                  <li key={ev.id} className={ev.tone}>
-                    <span className="timeline-dot" />
-                    <div>
-                      <div className="timeline-title">
-                        <strong>{ev.title}</strong>
-                        <time>{formatDate(ev.occurredAt)}</time>
-                      </div>
-                      <p>{ev.detail}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-
-            <div className="action-buttons">
+      {expireConfirmRecord && (
+        <div
+          className="coupon-picker-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !submitting) setExpireConfirmRecord(null)
+          }}
+        >
+          <section className="close-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="expire-confirm-title">
+            <h2 id="expire-confirm-title">쿠폰을 만료 처리할까요?</h2>
+            <div className="close-confirm-actions">
               <button
                 type="button"
-                onClick={handleUseCoupon}
-                disabled={submitting || selected?.status !== 'ISSUED'}
-                title="ISSUED → USED 상태 전이"
-              >
-                사용 처리
-              </button>
-              <button
-                type="button"
-                className="cancel-btn"
-                onClick={handleCancelCoupon}
-                disabled={submitting || selected?.status !== 'USED'}
-                title="USED → ISSUED 상태 원복"
-              >
-                사용 취소
-              </button>
-              <button
-                type="button"
-                className={`expired-btn ${selected?.status === 'EXPIRED' ? 'active' : ''}`}
-                disabled
-                title={selected?.status === 'EXPIRED' ? '유효기간이 만료된 쿠폰입니다.' : '만료는 백그라운드 스케줄러가 자동으로 처리합니다.'}
-              >
-                {selected?.status === 'EXPIRED' ? '기간 만료' : '자동 만료'}
-              </button>
-            </div>
-            {selected.status === 'REQUEST_FAILED' && (
-              <button
-                type="button"
-                className="retry-button"
-                onClick={() => requestIssue({ retryRecord: selected })}
+                className="primary-button"
+                onClick={() => executeExpireCoupon(expireConfirmRecord)}
                 disabled={submitting}
               >
-                동일 Idempotency-Key로 재시도
+                {submitting ? '만료 중…' : '만료'}
               </button>
-            )}
-          </div>
-              </aside>
-            )}
+              <button
+                type="button"
+                className="coupon-picker-cancel"
+                onClick={() => setExpireConfirmRecord(null)}
+                disabled={submitting}
+              >
+                취소
+              </button>
             </div>
-        </>
-      ) : (
-        <div className="empty-state">
-          <span>＋</span>
-          <strong>아직 발급 요청이 없습니다</strong>
-          <p>발급 운영에서 사용자 쿠폰을 발급한 뒤 상태 변경 테스트를 진행하세요.</p>
+          </section>
         </div>
       )}
-    </article>
+    </>
   )
 
   if (view === 'coupon-control') {
@@ -865,7 +932,7 @@ function OperationsTab({
         <article className="panel history-panel">
           <div className="panel-heading">
             <div>
-              <span className="section-number">03</span>
+              <span className="section-number">02</span>
               <h2>발급 이력</h2>
             </div>
             {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
@@ -933,7 +1000,7 @@ function OperationsTab({
         <article className="panel timeline-panel">
           <div className="panel-heading">
             <div>
-              <span className="section-number">04</span>
+              <span className="section-number">03</span>
               <h2>쿠폰 상태 이력</h2>
             </div>
             <span className="api-chip subtle">
