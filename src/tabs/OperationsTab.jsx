@@ -94,7 +94,9 @@ function OperationsTab({
   const selectedIssueCampaign = recentCampaigns.find(
     (campaign) => String(campaign.eventId) === String(eventId),
   )
-  const selectedPendingId = selected?.requestId && PENDING_STATUSES.has(selected.status)
+  const selectedPendingId = selected?.requestId && (
+    PENDING_STATUSES.has(selected.status) || selected.maskedUserName === undefined
+  )
     ? selected.id
     : null
   const selectedPendingEventId = selectedPendingId ? selected.eventId : null
@@ -130,9 +132,11 @@ function OperationsTab({
   }
 
   const visibleUserRecords = userSearch.trim()
-    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE'
-        && recordCampaignLabel(record, recentCampaigns).toLowerCase()
-          .includes(userSearch.trim().toLowerCase()))
+    ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE' && (
+        String(record.userId).includes(userSearch.trim())
+        || recordCampaignLabel(record, recentCampaigns).toLowerCase()
+          .includes(userSearch.trim().toLowerCase())
+      ))
     : records.filter((record) => record.status !== 'REJECTED_DUPLICATE')
 
   useEffect(() => {
@@ -183,6 +187,7 @@ function OperationsTab({
       }
     }
 
+    refreshPendingStatus()
     const timer = window.setInterval(refreshPendingStatus, 3000)
 
     return () => {
@@ -200,7 +205,7 @@ function OperationsTab({
       return
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
-      setNotice({ tone: 'danger', message: '발급 사용자 키는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '사용자 ID는 1 이상의 정수여야 합니다.' })
       return
     }
     const targetCampaign = recentCampaigns.find(
@@ -379,7 +384,7 @@ function OperationsTab({
                   type="search"
                   value={userSearch}
                   onChange={(event) => setUserSearch(event.target.value)}
-                  placeholder="발급 회차 검색"
+                  placeholder="사용자 ID 또는 발급 회차"
                 />
               </label>
               {visibleUserRecords.length > 0 ? (
@@ -393,9 +398,9 @@ function OperationsTab({
                       className={record.id === selected?.id ? 'selected' : ''}
                       onClick={() => setSelectedId(record.id)}
                     >
-                      <span className="user-list-avatar">U+</span>
+                      <span className="user-list-avatar">{String(record.userId).slice(-2)}</span>
                       <span className="user-list-copy">
-                        <strong>발급 사용자</strong>
+                        <strong>사용자 #{record.userId}</strong>
                         <small>{recordCampaignLabel(record, recentCampaigns)}</small>
                       </span>
                       <span className={`status-badge compact ${statusMeta(record.status).tone}`}>
@@ -413,10 +418,10 @@ function OperationsTab({
               <aside className="user-detail-panel" aria-labelledby="selected-user-title">
                 <div className="user-detail-heading">
                   <div className="user-identity">
-                    <span className="user-avatar">U+</span>
+                    <span className="user-avatar">{String(selected.userId).slice(-2)}</span>
                     <div>
                       <span className="user-detail-kicker">SELECTED USER</span>
-                      <strong id="selected-user-title">발급 사용자</strong>
+                      <strong id="selected-user-title">사용자 #{selected.userId}</strong>
                       <small>{recordCampaignLabel(selected, recentCampaigns)}</small>
                     </div>
                   </div>
@@ -441,6 +446,21 @@ function OperationsTab({
                     <span>이미 발급된 사용자라 추가 발급은 차단되었습니다.</span>
                   </div>
                 )}
+
+                <dl className="user-profile-grid" aria-label="마스킹된 사용자 정보">
+                  <div>
+                    <dt>이름</dt>
+                    <dd>{selected.maskedUserName ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>이메일</dt>
+                    <dd title={selected.maskedUserEmail}>{selected.maskedUserEmail ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>휴대폰 번호</dt>
+                    <dd>{selected.maskedUserPhone ?? '-'}</dd>
+                  </div>
+                </dl>
 
                 <dl className="issue-detail-grid">
             <div>
@@ -584,12 +604,11 @@ function OperationsTab({
                 }}
               >
                 <label>
-                  발급 사용자 키
+                  사용자 ID
                   <input
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]+"
-                    autoComplete="off"
+                    type="number"
+                    min="1"
+                    step="1"
                     value={userId}
                     onChange={(event) => setUserId(event.target.value)}
                     placeholder="예: 10001"
@@ -648,7 +667,7 @@ function OperationsTab({
             <table>
               <thead>
                 <tr>
-                  <th>사용자</th>
+                  <th>사용자 ID</th>
                   <th>쿠폰</th>
                   <th>순번</th>
                   <th>상태</th>
@@ -660,7 +679,7 @@ function OperationsTab({
                   const meta = statusMeta(record.status)
                   return (
                     <tr key={record.id} onClick={() => setSelectedId(record.id)}>
-                      <td><strong>발급 사용자</strong></td>
+                      <td><strong>{record.userId}</strong></td>
                       <td>{recordCampaignLabel(record, recentCampaigns)}</td>
                       <td>{record.issueSequence ?? '-'}</td>
                       <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
@@ -728,7 +747,7 @@ function OperationsTab({
                       <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
                     </div>
                     <p>
-                      발급 순번({record.issueSequence}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
                     </p>
                   </div>
                 </li>

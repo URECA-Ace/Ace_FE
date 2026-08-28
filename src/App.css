@@ -2560,6 +2560,38 @@ h2 {
   margin-top: 13px;
 }
 
+.user-profile-grid {
+  margin: 14px 0 0;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid #eee8f0;
+  border-radius: 10px;
+  background: #fcf9fc;
+}
+
+.user-profile-grid div {
+  min-width: 0;
+}
+
+.user-profile-grid dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.user-profile-grid dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .duplicate-notice {
   margin-top: 14px;
   padding: 10px 12px;
@@ -3095,7 +3127,8 @@ tbody tr:hover {
   }
 
   .issue-form,
-  .issue-detail-grid {
+  .issue-detail-grid,
+  .user-profile-grid {
     grid-template-columns: 1fr;
   }
 
