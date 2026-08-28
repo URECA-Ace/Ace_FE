@@ -16,6 +16,7 @@ const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
 const REPORT_REFRESH_INTERVAL_MS = 10_000
 const VIOLATION_PAGE_SIZE = 20
+const PAGE_GROUP_SIZE = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
@@ -436,6 +437,15 @@ function IntegrityReportTab() {
   ).slice(0, RECENT_RESULT_PAGE_SIZE)
   const filteredRecoveryHistory = filterRecoveryHistory(recoveryHistory, recoverySearchField, recoverySearchText)
   const selectedCatalog = scopeCatalogs[selectedScope]
+  const recentPageGroupStart = Math.floor(recentPageData.page / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE
+  const recentPageGroupEnd = Math.min(
+    recentPageGroupStart + PAGE_GROUP_SIZE,
+    recentPageData.totalPages,
+  )
+  const recentPageNumbers = Array.from(
+    { length: Math.max(0, recentPageGroupEnd - recentPageGroupStart) },
+    (_, index) => recentPageGroupStart + index,
+  )
 
   return (
     <section className="reconciliation-report" aria-labelledby="reconciliation-title">
@@ -640,17 +650,34 @@ function IntegrityReportTab() {
           <div className="pagination-buttons" aria-label="최근 검증 결과 페이지 이동">
             <button
               type="button"
-              onClick={() => setRecentPage((page) => Math.max(0, page - 1))}
-              disabled={reportLoading || recentPageData.page === 0}
+              className="pagination-group-button"
+              aria-label="이전 10개 페이지"
+              onClick={() => setRecentPage(Math.max(0, recentPageGroupStart - PAGE_GROUP_SIZE))}
+              disabled={reportLoading || recentPageGroupStart === 0}
             >
-              이전
+              ‹
             </button>
+            {recentPageNumbers.map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={page === recentPageData.page ? 'active' : ''}
+                aria-current={page === recentPageData.page ? 'page' : undefined}
+                aria-label={`${page + 1}페이지`}
+                onClick={() => setRecentPage(page)}
+                disabled={reportLoading}
+              >
+                {page + 1}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={() => setRecentPage((page) => page + 1)}
-              disabled={reportLoading || !recentPageData.hasNext}
+              className="pagination-group-button"
+              aria-label="다음 10개 페이지"
+              onClick={() => setRecentPage(recentPageGroupEnd)}
+              disabled={reportLoading || recentPageGroupEnd >= recentPageData.totalPages}
             >
-              다음
+              ›
             </button>
           </div>
         </div>

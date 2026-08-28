@@ -357,8 +357,8 @@
 }
 
 .recent-results-scroll {
-  height: 320px;
-  overflow: auto;
+  height: auto;
+  overflow-x: auto;
 }
 
 .recent-results-scroll thead {
@@ -381,6 +381,8 @@
 
 .pagination-buttons {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -405,6 +407,17 @@
   color: var(--muted);
   background: #f5f3f6;
   cursor: not-allowed;
+}
+
+.pagination-buttons button.active {
+  border-color: var(--magenta);
+  color: #fff;
+  background: var(--magenta);
+}
+
+.pagination-buttons .pagination-group-button {
+  min-width: 34px;
+  font-size: 16px;
 }
 
 .reconciliation-scroll-area {
