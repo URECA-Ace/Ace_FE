@@ -28,7 +28,7 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
                   <span className={`transition-dot ${statusClass}`} />
                   <div>
                     <strong>{campaign.couponName} - {campaign.round}회차</strong>
-                    <small>쿠폰 #{campaign.couponId} · 이벤트 #{campaign.eventId}</small>
+                    <small>{campaign.round ?? '-'}회차 · {campaign.status ?? '상태 확인 필요'}</small>
                   </div>
                   <span className={`campaign-status ${statusClass}`}>
                     {STATUS_LABELS[campaign.status] ?? campaign.status}

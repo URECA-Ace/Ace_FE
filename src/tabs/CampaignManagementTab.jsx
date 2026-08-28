@@ -51,7 +51,6 @@ function CampaignManagementTab({
   setOperationCampaign,
   setEventId,
   setLoadEventId,
-  setActiveTab,
   setNotice,
   campaignLabel,
   formatDate,
@@ -157,7 +156,7 @@ function CampaignManagementTab({
       setNotice({
         tone: 'success',
         toast: true,
-        message: `쿠폰 상품 ${data.couponId}번이 생성되었습니다. 이제 1회차 발급 일정을 설정하세요.`,
+        message: '쿠폰 상품이 생성되었습니다. 이제 1회차 발급 일정을 설정하세요.',
       })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -177,7 +176,7 @@ function CampaignManagementTab({
     const closeDate = new Date(closeAt)
 
     if (!Number.isSafeInteger(parsedCouponId) || parsedCouponId <= 0) {
-      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '선택한 쿠폰 정보가 올바르지 않습니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedTotalStock) || parsedTotalStock <= 0) {
@@ -230,9 +229,8 @@ function CampaignManagementTab({
       setNotice({
         tone: 'success',
         toast: true,
-        message: `쿠폰 이벤트 ${newEventId ?? '-'}번이 생성되고 Redis 재고가 초기화되었습니다. 발급 운영으로 이동했습니다.`,
+        message: '쿠폰 이벤트가 생성되고 Redis 재고가 초기화되었습니다.',
       })
-      setActiveTab('operations')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
       setNotice({
@@ -249,7 +247,7 @@ function CampaignManagementTab({
     const parsedEventId = Number(initializationEventId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '초기화할 쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '초기화할 발급 회차가 올바르지 않습니다.' })
       return
     }
 
@@ -268,7 +266,7 @@ function CampaignManagementTab({
       setLoadEventId(String(data.eventId))
       setNotice({
         tone: 'success',
-        message: `쿠폰 ${data.eventId}번 Redis 초기화 결과: ${data.result}`,
+        message: `Redis 초기화 결과: ${data.result}`,
       })
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -398,7 +396,7 @@ function CampaignManagementTab({
           </form>
           {createdCoupon && (
             <div className="created-event-summary" role="status">
-              <strong>쿠폰 #{createdCoupon.couponId}</strong>
+              <strong>쿠폰 상품 생성 완료</strong>
               <span>{createdCoupon.couponName}</span>
               <small>{createdCoupon.type} · 혜택 {createdCoupon.value} · 발급 후 {createdCoupon.validHours}시간</small>
             </div>
@@ -436,7 +434,7 @@ function CampaignManagementTab({
             <label>
               대상 쿠폰
               <input
-                value={selectedCoupon ? `#${selectedCoupon.couponId} · ${selectedCoupon.couponName}` : ''}
+                value={selectedCoupon?.couponName ?? ''}
                 readOnly
                 aria-readonly="true"
                 placeholder="위 목록에서 쿠폰을 선택하세요"
@@ -498,7 +496,7 @@ function CampaignManagementTab({
           </form>
           {createdEvent && (
             <div className="created-event-summary" role="status">
-              <strong>이벤트 #{createdEvent.eventId}</strong>
+              <strong>{createdEvent.couponName ?? '쿠폰 이벤트'}</strong>
               <span>{createdEvent.status} · {createdEvent.remainingStock?.toLocaleString()}장 대기</span>
               <small>{formatDate(createdEvent.openAt)} 오픈 · {formatDate(createdEvent.closeAt)} 마감</small>
             </div>
@@ -550,7 +548,7 @@ function CampaignManagementTab({
           </div>
           {initializationResult && (
             <dl className="initialization-result" aria-label="Redis 초기화 결과">
-              <div><dt>이벤트</dt><dd>#{initializationResult.eventId}</dd></div>
+              <div><dt>발급 회차</dt><dd>{campaignLabel(recentCampaigns.find((campaign) => String(campaign.eventId) === String(initializationResult.eventId)))}</dd></div>
               <div><dt>결과</dt><dd>{initializationResult.result}</dd></div>
               <div><dt>초기 재고</dt><dd>{initializationResult.totalStock?.toLocaleString()}장</dd></div>
               <div><dt>발급 기간</dt><dd>{formatDate(initializationResult.openAt)} ~ {formatDate(initializationResult.closeAt)}</dd></div>
@@ -609,7 +607,7 @@ function CampaignManagementTab({
                   >
                     <span>
                       <strong>{coupon.couponName}</strong>
-                      <small>#{coupon.couponId} · {coupon.type}</small>
+                      <small>{coupon.type}</small>
                     </span>
                     <span className="catalog-check" aria-hidden="true">{String(coupon.couponId) === String(selectedCouponId) ? '✓' : '○'}</span>
                   </button>
