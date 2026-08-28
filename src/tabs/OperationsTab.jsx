@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon } from '../api/couponApi'
+import { useEffect, useState } from 'react'
+import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
+import { loadRecords, saveRecords } from '../utils/issueRecords'
 
-const STORAGE_KEY = 'ace-manager-issue-records'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 
 const STATUS_META = {
   ACCEPTED: { label: '발급 승인', tone: 'waiting' },
   PROCESSING: { label: '저장 처리 중', tone: 'waiting' },
   ISSUED: { label: '발급 완료', tone: 'success' },
+  USED: { label: '사용 완료', tone: 'neutral' },
+  EXPIRED: { label: '기간 만료', tone: 'danger' },
   FAILED: { label: '저장 실패', tone: 'danger' },
   COMPENSATED: { label: '재고 원복', tone: 'neutral' },
   REJECTED_SOLD_OUT: { label: '재고 소진', tone: 'danger' },
@@ -16,15 +18,6 @@ const STATUS_META = {
   REJECTED_NOT_OPEN: { label: '오픈 전', tone: 'neutral' },
   REJECTED_CLOSED: { label: '마감', tone: 'neutral' },
   REQUEST_FAILED: { label: '요청 실패', tone: 'danger' },
-}
-
-export function loadRecords() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
-  } catch {
-    return []
-  }
 }
 
 function statusMeta(status) {
@@ -71,7 +64,6 @@ function OperationsTab({
   eventId,
   setEventId,
   recentCampaigns,
-  openCampaigns,
   operationCampaign,
   setOperationCampaign,
   setNotice,
@@ -88,12 +80,15 @@ function OperationsTab({
   const [issueCampaignPickerOpen, setIssueCampaignPickerOpen] = useState(false)
   const [historyScope, setHistoryScope] = useState('current')
   const [userSearch, setUserSearch] = useState('')
+  const [monitorStats, setMonitorStats] = useState(null)
 
   const selected = records.find((record) => record.id === selectedId) ?? records[0]
   const selectedIssueCampaign = recentCampaigns.find(
     (campaign) => String(campaign.eventId) === String(eventId),
   )
-  const selectedPendingId = selected?.requestId && PENDING_STATUSES.has(selected.status)
+  const selectedPendingId = selected?.requestId && (
+    PENDING_STATUSES.has(selected.status) || selected.maskedUserName === undefined
+  )
     ? selected.id
     : null
   const selectedPendingEventId = selectedPendingId ? selected.eventId : null
@@ -131,7 +126,8 @@ function OperationsTab({
   const visibleUserRecords = userSearch.trim()
     ? records.filter((record) => record.status !== 'REJECTED_DUPLICATE' && (
         String(record.userId).includes(userSearch.trim())
-        || recordCampaignLabel(record, recentCampaigns).toLowerCase().includes(userSearch.trim().toLowerCase())
+        || recordCampaignLabel(record, recentCampaigns).toLowerCase()
+          .includes(userSearch.trim().toLowerCase())
       ))
     : records.filter((record) => record.status !== 'REJECTED_DUPLICATE')
 
@@ -148,7 +144,7 @@ function OperationsTab({
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+      saveRecords(records)
     } catch {
       // 저장 공간이 제한된 환경에서도 API 시연 기능은 계속 동작한다.
     }
@@ -183,6 +179,7 @@ function OperationsTab({
       }
     }
 
+    refreshPendingStatus()
     const timer = window.setInterval(refreshPendingStatus, 3000)
 
     return () => {
@@ -191,28 +188,12 @@ function OperationsTab({
     }
   }, [selectedPendingEventId, selectedPendingId, selectedPendingRequestId, updateRecords])
 
-  const summary = useMemo(() => {
-    const accepted = records.filter((record) =>
-      ['ACCEPTED', 'ISSUED'].includes(record.status),
-    ).length
-    const processing = records.filter((record) =>
-      record.status === 'PROCESSING',
-    ).length
-    const failed = records.filter((record) =>
-      ['FAILED', 'COMPENSATED', 'REJECTED_DUPLICATE', 'REQUEST_FAILED'].includes(record.status),
-    ).length
-    const latestStock = records.find(
-      (record) => record.remainingStock !== null && record.remainingStock !== undefined,
-    )?.remainingStock
-    return { accepted, processing, failed, latestStock }
-  }, [records])
-
   async function requestIssue({ retryRecord } = {}) {
     const parsedEventId = Number(retryRecord?.eventId ?? eventId)
     const parsedUserId = Number(retryRecord?.userId ?? userId)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '선택한 발급 회차가 올바르지 않습니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedUserId) || parsedUserId <= 0) {
@@ -235,7 +216,7 @@ function OperationsTab({
       if (stats.status !== 'OPEN') {
         setNotice({
           tone: 'danger',
-          message: `쿠폰 ${parsedEventId}번은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
+          message: `선택한 쿠폰은 현재 ${stats.status} 상태입니다. OPEN 쿠폰만 발급할 수 있습니다.`,
         })
         return
       }
@@ -311,7 +292,7 @@ function OperationsTab({
             : record,
         ),
       )
-      setNotice({ tone: 'success', message: `사용자 ${parsedUserId}의 발급 요청이 승인되었습니다.` })
+      setNotice({ tone: 'success', message: '사용자의 발급 요청이 승인되었습니다.' })
       if (!retryRecord) setUserId('')
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
@@ -364,6 +345,124 @@ function OperationsTab({
     updateRecords([])
     setSelectedId(null)
     setNotice({ tone: 'neutral', message: '브라우저에 저장된 시연 기록을 비웠습니다.' })
+  }
+
+  async function handleUseCoupon() {
+    if (!selected) return
+    setSubmitting(true)
+    setNotice(null)
+    try {
+      let realIssueId = selected.issueId
+      if (!realIssueId && selected.eventId && selected.userId) {
+        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+      }
+      if (!realIssueId) {
+        setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
+        return
+      }
+
+      const idempotencyKey = crypto.randomUUID()
+      const data = await requestCouponUse(realIssueId, selected.userId, idempotencyKey, 'PAYMENT_USED')
+      updateRecords((current) =>
+        current.map((record) =>
+          record.id === selected.id
+            ? {
+                ...record,
+                issueId: realIssueId,
+                status: data.currentStatus,
+                lastCheckedAt: new Date().toISOString(),
+                events: [
+                  eventItem('STATE_CHANGE', '쿠폰 사용 처리', `${data.previousStatus} → ${data.currentStatus}`, 'success'),
+                  ...record.events,
+                ],
+              }
+            : record,
+        ),
+      )
+      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 처리가 완료되었습니다.` })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
+      if (isExpired) {
+        updateRecords((current) =>
+          current.map((record) =>
+            record.id === selected.id
+              ? {
+                  ...record,
+                  status: 'EXPIRED',
+                  lastCheckedAt: new Date().toISOString(),
+                  events: [
+                    eventItem('EXPIRED', '쿠폰 만료 확인', '유효기간이 만료되어 사용이 불가합니다.', 'danger'),
+                    ...record.events,
+                  ],
+                }
+              : record,
+          ),
+        )
+      }
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCancelCoupon() {
+    if (!selected) return
+    setSubmitting(true)
+    setNotice(null)
+    try {
+      let realIssueId = selected.issueId
+      if (!realIssueId && selected.eventId && selected.userId) {
+        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+      }
+      if (!realIssueId) {
+        setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
+        return
+      }
+
+      const idempotencyKey = crypto.randomUUID()
+      const data = await cancelCoupon(realIssueId, selected.userId, idempotencyKey, 'ORDER_CANCELED')
+      updateRecords((current) =>
+        current.map((record) =>
+          record.id === selected.id
+            ? {
+                ...record,
+                issueId: realIssueId,
+                status: data.currentStatus,
+                lastCheckedAt: new Date().toISOString(),
+                events: [
+                  eventItem('STATE_CHANGE', '쿠폰 사용 취소', `${data.previousStatus} → ${data.currentStatus}`, 'waiting'),
+                  ...record.events,
+                ],
+              }
+            : record,
+        ),
+      )
+      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 취소(재사용 원복)가 완료되었습니다.` })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
+      if (isExpired) {
+        updateRecords((current) =>
+          current.map((record) =>
+            record.id === selected.id
+              ? {
+                  ...record,
+                  status: 'EXPIRED',
+                  lastCheckedAt: new Date().toISOString(),
+                  events: [
+                    eventItem('EXPIRED', '쿠폰 만료 확인', '유효기간이 만료된 쿠폰입니다.', 'danger'),
+                    ...record.events,
+                  ],
+                }
+              : record,
+          ),
+        )
+      }
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const selectedMeta = statusMeta(selected?.status)
@@ -458,6 +557,21 @@ function OperationsTab({
                   </div>
                 )}
 
+                <dl className="user-profile-grid" aria-label="마스킹된 사용자 정보">
+                  <div>
+                    <dt>이름</dt>
+                    <dd>{selected.maskedUserName ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>이메일</dt>
+                    <dd title={selected.maskedUserEmail}>{selected.maskedUserEmail ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>휴대폰 번호</dt>
+                    <dd>{selected.maskedUserPhone ?? '-'}</dd>
+                  </div>
+                </dl>
+
                 <dl className="issue-detail-grid">
             <div>
               <dt>발급 순번</dt>
@@ -488,12 +602,34 @@ function OperationsTab({
           <div className="action-area">
             <div className="action-heading">
               <strong>상태 변경 이벤트</strong>
-              <span>백엔드 API 연결 대기</span>
+              <span>PATCH /api/v1/coupons/{'{issueId}'}/use · cancel</span>
             </div>
             <div className="action-buttons">
-              <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
-              <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
-              <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
+              <button
+                type="button"
+                onClick={handleUseCoupon}
+                disabled={submitting || selected?.status !== 'ISSUED'}
+                title="ISSUED → USED 상태 전이"
+              >
+                사용 처리
+              </button>
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={handleCancelCoupon}
+                disabled={submitting || selected?.status !== 'USED'}
+                title="USED → ISSUED 상태 원복"
+              >
+                사용 취소
+              </button>
+              <button
+                type="button"
+                className={`expired-btn ${selected?.status === 'EXPIRED' ? 'active' : ''}`}
+                disabled
+                title={selected?.status === 'EXPIRED' ? '유효기간이 만료된 쿠폰입니다.' : '만료는 백그라운드 스케줄러가 자동으로 처리합니다.'}
+              >
+                {selected?.status === 'EXPIRED' ? '기간 만료' : '자동 만료'}
+              </button>
             </div>
             {selected.status === 'REQUEST_FAILED' && (
               <button
@@ -531,25 +667,26 @@ function OperationsTab({
           <article className="summary-card accent-card stock-card">
             <div>
               <span>최근 확인 잔여 수량</span>
-              <strong>{summary.latestStock?.toLocaleString() ?? '-'}</strong>
+              <strong>{monitorStats?.remainingStock?.toLocaleString() ?? '-'}</strong>
             </div>
           </article>
           <article className="summary-card approval-card">
             <span>발급 판정 승인</span>
-            <strong>{summary.accepted.toLocaleString()}</strong>
+            <strong>{monitorStats?.allocatedQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
           <article className="summary-card processing-card">
             <span>처리 중</span>
-            <strong>{summary.processing.toLocaleString()}</strong>
+            <strong>{monitorStats?.pendingQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
-          <article className="summary-card failure-card">
-            <span>실패 · 원복</span>
-            <strong>{summary.failed.toLocaleString()}</strong>
+          <article className="summary-card confirmed-card">
+            <span>DB 발급 확정</span>
+            <strong>{monitorStats?.confirmedQuantity?.toLocaleString() ?? '-'}</strong>
           </article>
         </section>
         <CampaignMonitor
           selectedEventId={operationCampaign?.eventId}
           recentCampaigns={recentCampaigns}
+          onStatsChange={setMonitorStats}
         />
       </>
     )
@@ -662,7 +799,7 @@ function OperationsTab({
             <table>
               <thead>
                 <tr>
-                  <th>사용자</th>
+                  <th>사용자 ID</th>
                   <th>쿠폰</th>
                   <th>순번</th>
                   <th>상태</th>
@@ -674,7 +811,7 @@ function OperationsTab({
                   const meta = statusMeta(record.status)
                   return (
                     <tr key={record.id} onClick={() => setSelectedId(record.id)}>
-                      <td><strong>#{record.userId}</strong></td>
+                      <td><strong>{record.userId}</strong></td>
                       <td>{recordCampaignLabel(record, recentCampaigns)}</td>
                       <td>{record.issueSequence ?? '-'}</td>
                       <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
@@ -727,7 +864,7 @@ function OperationsTab({
                   <span className="timeline-dot" />
                   <div>
                     <div className="timeline-title">
-                      <strong>중복 발급 차단 · 사용자 {record.userId}</strong>
+                      <strong>중복 발급 차단</strong>
                       <time>{formatDate(record.lastCheckedAt)}</time>
                     </div>
                     <p>이미 발급 완료된 사용자에게 중복 발급 요청이 있었습니다.</p>
@@ -742,7 +879,7 @@ function OperationsTab({
                       <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
                     </div>
                     <p>
-                      사용자({record.userId}) · 발급 순번({record.issueSequence}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
                     </p>
                   </div>
                 </li>

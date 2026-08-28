@@ -286,6 +286,15 @@ h1 {
   color: #b51d45;
 }
 
+.summary-card.confirmed-card {
+  border-color: rgba(137, 65, 180, 0.42);
+  background: linear-gradient(135deg, #fff 0%, #faf5ff 100%);
+}
+
+.summary-card.confirmed-card strong {
+  color: #7b2da5;
+}
+
 .summary-card > span:first-child,
 .summary-card div > span {
   color: var(--muted);
@@ -1226,7 +1235,7 @@ h1 {
 }
 
 .monitor-header {
-  padding: 24px 27px;
+  padding: 28px 31px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1247,13 +1256,13 @@ h1 {
 
 .monitor-header h2 {
   margin-bottom: 7px;
-  font-size: 19px;
+  font-size: 21px;
 }
 
 .monitor-header p {
   margin-bottom: 0;
   color: #847c87;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .monitor-form {
@@ -1316,7 +1325,7 @@ h1 {
 }
 
 .monitor-body {
-  padding: 20px 24px;
+  padding: 24px 28px;
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   gap: 12px;
@@ -1326,8 +1335,8 @@ h1 {
 .campaign-state-card,
 .inventory-watch {
   min-width: 0;
-  min-height: 178px;
-  padding: 16px;
+  min-height: 196px;
+  padding: 19px;
   border: 1px solid #eae5ec;
   border-radius: 13px;
   background: #fff;
@@ -1379,7 +1388,7 @@ h1 {
 
 .campaign-state-heading strong {
   color: #3b333d;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .state-live-dot {
@@ -1425,9 +1434,9 @@ h1 {
 }
 
 .campaign-state-card > p {
-  margin: 16px 0;
+  margin: 18px 0;
   color: #7f7782;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.55;
 }
 
@@ -1491,13 +1500,13 @@ h1 {
 .inventory-heading span {
   margin-bottom: 9px;
   color: #8d8590;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
 }
 
 .inventory-heading strong {
   color: #39313b;
-  font: 800 23px/1 Manrope, sans-serif;
+  font: 800 26px/1 Manrope, sans-serif;
   letter-spacing: -0.8px;
 }
 
@@ -1537,6 +1546,182 @@ h1 {
   margin: 11px 0 0;
   color: #aaa2ad;
   font-size: 7px;
+}
+
+.issuance-log-panel {
+  margin: 0 28px 24px;
+  border: 1px solid #e6e1e8;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.issuance-log-header {
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #eeeaf0;
+}
+
+.issuance-log-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #0b8f67;
+  font: 800 7px/1 Manrope, sans-serif;
+  letter-spacing: 1.2px;
+}
+
+.issuance-log-header h3 {
+  margin: 0 0 4px;
+  color: #39313b;
+  font-size: 15px;
+}
+
+.issuance-log-header p {
+  margin: 0;
+  color: #938b96;
+  font-size: 9px;
+}
+
+.issuance-log-summary {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.issuance-log-summary span,
+.issuance-log-summary small {
+  display: block;
+}
+
+.issuance-log-summary span {
+  color: #087552;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.issuance-log-summary small {
+  margin-top: 4px;
+  color: #aaa2ad;
+  font-size: 7px;
+}
+
+.issuance-log-table {
+  overflow-x: auto;
+}
+
+.issuance-log-columns,
+.issuance-log-list li {
+  display: grid;
+  grid-template-columns: 42px 96px 120px minmax(170px, 1.5fr) minmax(150px, 1.2fr) 100px minmax(140px, 1.1fr);
+  align-items: center;
+  column-gap: 12px;
+  min-width: 820px;
+}
+
+.issuance-log-columns {
+  height: 34px;
+  padding: 0 22px;
+  color: #9d96a0;
+  background: #f8f6f9;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.issuance-log-list {
+  --issuance-log-row-height: 42px;
+  max-height: calc(var(--issuance-log-row-height) * 20);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.issuance-log-list li {
+  height: var(--issuance-log-row-height);
+  padding: 0 22px;
+  border-bottom: 1px solid #f1eef2;
+  color: #625a65;
+  font: 700 9px/1 Manrope, sans-serif;
+  animation: issuance-log-enter 180ms ease-out;
+}
+
+.issuance-log-list li:last-child {
+  border-bottom: 0;
+}
+
+.issuance-log-list li strong {
+  color: var(--magenta-dark);
+  font-size: 10px;
+}
+
+.issuance-log-list li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issuance-log-status-dot {
+  justify-self: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #13a978;
+  box-shadow: 0 0 0 3px rgba(19, 169, 120, 0.1);
+}
+
+.issuance-log-status-dot.waiting {
+  background: #e2a100;
+  box-shadow: 0 0 0 3px rgba(226, 161, 0, 0.12);
+}
+
+.issuance-log-list li time {
+  color: #8f8792;
+}
+
+.issuance-log-time {
+  text-align: center;
+}
+
+.issuance-log-list li em {
+  font-style: normal;
+}
+
+.issuance-log-empty {
+  min-height: 96px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  color: #a39ca6;
+  text-align: center;
+}
+
+.issuance-log-empty strong {
+  color: #69616b;
+  font-size: 9px;
+}
+
+.issuance-log-empty span {
+  font-size: 8px;
+}
+
+@keyframes issuance-log-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .monitor-error {
@@ -2375,6 +2560,38 @@ h2 {
   margin-top: 13px;
 }
 
+.user-profile-grid {
+  margin: 14px 0 0;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid #eee8f0;
+  border-radius: 10px;
+  background: #fcf9fc;
+}
+
+.user-profile-grid div {
+  min-width: 0;
+}
+
+.user-profile-grid dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.user-profile-grid dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .duplicate-notice {
   margin-top: 14px;
   padding: 10px 12px;
@@ -2910,7 +3127,8 @@ tbody tr:hover {
   }
 
   .issue-form,
-  .issue-detail-grid {
+  .issue-detail-grid,
+  .user-profile-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2989,6 +3207,19 @@ tbody tr:hover {
     margin-inline: 16px;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .issuance-log-panel {
+    margin-inline: 16px;
+  }
+
+  .issuance-log-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .issuance-log-summary {
+    text-align: left;
   }
 
   .monitor-error small {
@@ -3073,4 +3304,77 @@ tbody tr:hover {
   .initialization-result {
     grid-template-columns: 1fr;
   }
+}
+
+.action-area {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fdfbfe;
+  border: 1px solid #f0ebf2;
+}
+
+.action-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.action-heading strong {
+  font-size: 11px;
+  color: #3b333e;
+}
+
+.action-heading span {
+  color: #a098a3;
+  font-size: 8px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.action-buttons button {
+  padding: 8px 5px;
+  border: 1px solid #e5e0e7;
+  border-radius: 8px;
+  color: #a19aa4;
+  background: #f5f3f6;
+  font-size: 9px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.action-buttons button:not(:disabled) {
+  color: #ffffff;
+  background: #e6007e;
+  border-color: #e6007e;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(230, 0, 126, 0.35);
+}
+
+.action-buttons button:not(:disabled):hover {
+  background: #cc006f;
+  transform: translateY(-1px);
+}
+
+.action-buttons button.cancel-btn:not(:disabled) {
+  background: #f57c00;
+  border-color: #f57c00;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.35);
+}
+
+.action-buttons button.cancel-btn:not(:disabled):hover {
+  background: #e65100;
+}
+
+.action-buttons button.expired-btn.active {
+  color: #ffffff;
+  background: #d92654;
+  border-color: #d92654;
+  box-shadow: 0 2px 8px rgba(217, 38, 84, 0.35);
+  opacity: 1;
 }

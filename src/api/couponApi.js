@@ -79,6 +79,19 @@ export function getIssuanceStats(eventId, signal) {
   })
 }
 
+export function getIssuanceLogs(eventId, afterSequence, size, signal) {
+  const query = new URLSearchParams({
+    afterSequence: String(afterSequence),
+    size: String(size),
+  })
+  return request(`/api/v1/events/${eventId}/issuance-logs?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function createCoupon(payload, signal) {
   return request('/api/v1/coupons', {
     method: 'POST',
@@ -214,5 +227,39 @@ export function getConsistencyRecoveries(page = 0, size = 100, signal) {
     signal,
     cache: 'no-store',
     headers: { Accept: 'application/json' },
+  })
+}
+
+export function getCouponIssueId(eventId, userId, signal) {
+  return request(`/api/v1/coupons/issues/lookup?eventId=${eventId}&userId=${userId}`, {
+    method: 'GET',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function useCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/use`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
+  })
+}
+
+export function cancelCoupon(issueId, userId, idempotencyKey, reason, signal) {
+  return request(`/api/v1/coupons/${issueId}/cancel`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ userId, reason }),
   })
 }

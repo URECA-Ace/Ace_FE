@@ -150,13 +150,13 @@ function LoadTestTab({
           <small>
             {loadResult.finishedAt
               ? `소요 ${(loadResult.elapsedMs / 1000).toFixed(1)}초 · 최저 잔여 ${loadResult.remainingStock ?? '-'}장`
-              : '쿠폰 관리에서 생성한 이벤트 ID로 실행하세요.'}
+              : '쿠폰 관리에서 생성한 발급 회차로 실행하세요.'}
           </small>
         </div>
       </div>
 
       <p className="traffic-note">
-        참여자 {PARTICIPANT_COUNT.toLocaleString()}명은 서로 다른 사용자 ID로 한 번씩 요청하며, 설정된 재고만큼 쿠폰을 발급받습니다.
+        참여자 {PARTICIPANT_COUNT.toLocaleString()}명은 서로 다른 사용자로 한 번씩 요청하며, 설정된 재고만큼 쿠폰을 발급받습니다.
         개별 응답은 사용자 이력에 저장하지 않고 결과만 집계합니다.
         이 수치는 브라우저에서 API까지의 요청 결과로, 서버 내부 Lua 벤치마크 TPS와는 구분됩니다.
       </p>

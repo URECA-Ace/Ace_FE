@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, getCoupons, getIssuanceStats, getRecentCouponEvents, issueCoupon } from './api/couponApi'
 import CampaignManagementTab from './tabs/CampaignManagementTab'
-import OperationsTab, { loadRecords } from './tabs/OperationsTab'
+import OperationsTab from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
+import { loadRecords } from './utils/issueRecords'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
@@ -122,7 +123,7 @@ function normalizeCampaigns(data) {
 
 function campaignLabel(campaign) {
   if (!campaign) return '발급 회차를 선택하세요'
-  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차(${campaign.eventId})`
+  return `${campaign.couponName ?? '쿠폰'}-${campaign.round ?? '-'}회차`
 }
 
 function App() {
@@ -180,7 +181,7 @@ function App() {
     const parsedConcurrency = Number(concurrency)
 
     if (!Number.isSafeInteger(parsedEventId) || parsedEventId <= 0) {
-      setNotice({ tone: 'danger', message: '부하 발급 쿠폰 ID는 1 이상의 정수여야 합니다.' })
+      setNotice({ tone: 'danger', message: '선택한 발급 회차가 올바르지 않습니다.' })
       return
     }
     if (!Number.isSafeInteger(parsedConcurrency) || parsedConcurrency < 1 || parsedConcurrency > 300) {
@@ -548,7 +549,6 @@ function App() {
             setOperationCampaign={setOperationCampaign}
             setEventId={setEventId}
             setLoadEventId={setLoadEventId}
-            setActiveTab={setActiveTab}
             setNotice={setNotice}
             campaignLabel={campaignLabel}
             formatDate={formatDate}
