@@ -4,6 +4,7 @@ import CampaignManagementTab from './tabs/CampaignManagementTab'
 import OperationsTab from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
+import NotificationToastStack from './components/NotificationToastStack'
 import { loadRecords } from './utils/issueRecords'
 import './App.css'
 
@@ -659,6 +660,8 @@ function App() {
 
         {activeTab === 'integrity' && <IntegrityReportTab />}
       </main>
+
+      <NotificationToastStack />
     </div>
   )
 }
