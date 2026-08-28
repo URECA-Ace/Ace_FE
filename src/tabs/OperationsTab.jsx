@@ -897,8 +897,16 @@ function OperationsTab({
               <div className="coupon-brand">U<sup>+</sup></div>
               <div className="coupon-copy">
                 <span>FREEDOM DAY</span>
-                <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
-                <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
+                <strong>
+                  {selectedIssueCampaign
+                    ? `${selectedIssueCampaign.couponName ?? '쿠폰'} (${selectedIssueCampaign.round ?? '-'}회차)`
+                    : '데이터 하루 무제한 쿠폰'}
+                </strong>
+                <small>
+                  {selectedIssueCampaign
+                    ? '추가된 쿠폰으로 즐거운 시간 보내세요.'
+                    : '최근 발급 회차를 선택하세요'}
+                </small>
               </div>
               <div className="coupon-badge">24H</div>
               <span className="coupon-preview-hint">
@@ -952,29 +960,36 @@ function OperationsTab({
               <span className="section-number">02</span>
               <h2>발급 이력</h2>
             </div>
-            {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
+            <div className="panel-heading-actions">
+              {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
+            </div>
           </div>
-          <div className="history-scope-tabs" role="tablist" aria-label="발급 이력 조회 범위">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={historyScope === 'all'}
-              className={historyScope === 'all' ? 'selected' : ''}
-              onClick={() => setHistoryScope('all')}
-            >
-              전체
-              <span>{records.length.toLocaleString()}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={historyScope === 'current'}
-              className={historyScope === 'current' ? 'selected' : ''}
-              onClick={() => setHistoryScope('current')}
-            >
-              현재 쿠폰
-              <span>{currentCampaignRecords.length.toLocaleString()}</span>
-            </button>
+          <div className="history-scope-bar">
+            <div className="history-scope-tabs" role="tablist" aria-label="발급 이력 조회 범위">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'all'}
+                className={historyScope === 'all' ? 'selected' : ''}
+                onClick={() => setHistoryScope('all')}
+              >
+                전체
+                <span>{records.length.toLocaleString()}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'current'}
+                className={historyScope === 'current' ? 'selected' : ''}
+                onClick={() => setHistoryScope('current')}
+              >
+                현재 쿠폰
+                <span>{currentCampaignRecords.length.toLocaleString()}</span>
+              </button>
+            </div>
+            <span className="api-chip subtle">
+              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
+            </span>
           </div>
           <div className="table-wrap history-table-wrap">
             <table>
@@ -1020,9 +1035,6 @@ function OperationsTab({
               <span className="section-number">03</span>
               <h2>쿠폰 상태 이력</h2>
             </div>
-            <span className="api-chip subtle">
-              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
-            </span>
           </div>
           {statusHistoryRecords.length > 0 || campaignHasStarted || campaignHasClosed ? (
             <ol className="timeline">
@@ -1052,17 +1064,42 @@ function OperationsTab({
                   </div>
                 </li>
               ) : (
-                <li key={`${record.id}:${record.issueSequence}`} className="success">
-                  <span className="timeline-dot" />
-                  <div>
-                    <div className="timeline-title">
-                      <strong>Redis 판정 승인 · 발급 순번 {record.issueSequence}</strong>
-                      <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
+                <li key={record.id} className="timeline-issue success">
+                    <span className="timeline-dot" />
+                    <div>
+                      <div className="timeline-title">
+                        <strong>발급 완료 · 발급 순번 {record.issueSequence}</strong>
+                        <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
+                      </div>
+                      <p>
+                        사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      </p>
+                      {record.events?.some((event) => (
+                        event.type === 'STATE_CHANGE' || event.type === 'EXPIRED'
+                      )) && (
+                        <ol className="timeline-branch">
+                          {[...record.events].filter((event) => (
+                            event.type === 'STATE_CHANGE' || event.type === 'EXPIRED'
+                          )).reverse().map((event) => (
+                            <li
+                              key={event.id}
+                              className={event.title === '쿠폰 사용 처리'
+                                ? 'used'
+                                : event.title === '쿠폰 사용 취소' ? 'cancelled' : event.tone}
+                            >
+                              <span className="timeline-dot" />
+                              <div>
+                                <div className="timeline-title">
+                                  <strong>{event.title}</strong>
+                                  <time>{formatDate(event.occurredAt)}</time>
+                                </div>
+                                <p>{event.detail}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
                     </div>
-                    <p>
-                      사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
-                    </p>
-                  </div>
                 </li>
               ))}
               {campaignHasStarted && (
