@@ -5,14 +5,18 @@ import {
   getConsistencyRecoveries,
   getConsistencyRecoveryMethods,
   getConsistencyResults,
+  getConsistencyViolations,
   recoverConsistency,
   verifyConsistency,
 } from '../api/couponApi'
 import GrafanaMetricCard from '../components/GrafanaMetricCard'
 import './IntegrityReportTab.css'
 
-const RECENT_RESULT_LIMIT = 8
+const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
+const REPORT_REFRESH_INTERVAL_MS = 10_000
+const VIOLATION_PAGE_SIZE = 20
+const PAGE_GROUP_SIZE = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
@@ -88,11 +92,6 @@ function scopeLabel(result) {
   return '전체'
 }
 
-function formatDiff(diffDetail) {
-  if (!diffDetail) return '-'
-  return Object.entries(diffDetail).map(([key, value]) => `${key} ${value}`).join(' · ')
-}
-
 // FAIL 결과가 복구까지 끝난 경우, 최근 검증 결과 표에는 원래 상태(실패) 대신 복구 결과를 보여준다.
 function recentStatusMeta(result) {
   if (result.status === 'FAIL' && result.recoveryStatus === 'SUCCESS') return RECOVERY_STATUS_META.SUCCESS
@@ -164,6 +163,15 @@ function IntegrityReportTab() {
   const [recoveringResultId, setRecoveringResultId] = useState(null)
   const [reportLoading, setReportLoading] = useState(true)
   const [detailResult, setDetailResult] = useState(null)
+  const [detailViolations, setDetailViolations] = useState(null)
+  const [detailViolationPage, setDetailViolationPage] = useState(0)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState(null)
+  const [recentPage, setRecentPage] = useState(0)
+  const [recentPageData, setRecentPageData] = useState({
+    content: [], page: 0, size: RECENT_RESULT_PAGE_SIZE,
+    totalElements: 0, totalPages: 0, hasNext: false,
+  })
   const [scopeCatalogs, setScopeCatalogs] = useState({})
   const [selectedScope, setSelectedScope] = useState('EVENT')
   const [selectedChecks, setSelectedChecks] = useState([])
@@ -183,13 +191,13 @@ function IntegrityReportTab() {
   const [recoverySearchField, setRecoverySearchField] = useState('checkName')
   const [recoverySearchText, setRecoverySearchText] = useState('')
 
-  const refreshReportData = useCallback(async (signal) => {
+  const refreshReportData = useCallback(async (signal, requestedPage = 0) => {
     setReportLoading(true)
     try {
       const [recentPage, errorPage, failPage, recoveryPage] = await Promise.all([
-        getConsistencyResults({ page: 0, size: RECENT_RESULT_LIMIT }, signal),
-        getConsistencyResults({ status: 'ERROR', page: 0, size: RECENT_RESULT_LIMIT }, signal),
-        getConsistencyResults({ status: 'FAIL', page: 0, size: RECENT_RESULT_LIMIT }, signal),
+        getConsistencyResults({ page: requestedPage, size: RECENT_RESULT_PAGE_SIZE }, signal),
+        getConsistencyResults({ status: 'ERROR', page: 0, size: RECENT_RESULT_PAGE_SIZE }, signal),
+        getConsistencyResults({ status: 'FAIL', page: 0, size: RECENT_RESULT_PAGE_SIZE }, signal),
         getConsistencyRecoveries(0, 100, signal),
       ])
       const history = recoveryPage.content.map((entry) => ({
@@ -217,6 +225,15 @@ function IntegrityReportTab() {
           : null,
         }))
       setResults(normalizedResults)
+      setRecentPageData({
+        ...recentPage,
+        content: recentPage.content.map((result) => ({
+          ...result,
+          recoveryStatus: result.status === 'FAIL'
+            ? (latestRecoveryByResult.get(result.id) ?? result.recoveryStatus ?? 'NONE')
+            : null,
+        })),
+      })
       setRecoveryHistory(history.slice(0, RECOVERY_HISTORY_LIMIT))
 
       const failedResults = normalizedResults.filter((result) => result.status === 'FAIL')
@@ -240,7 +257,6 @@ function IntegrityReportTab() {
           Promise.all(SCOPE_TYPES.map(
             (scopeType) => getConsistencyChecks(scopeType, controller.signal),
           )),
-          refreshReportData(controller.signal),
         ])
         setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
       } catch (error) {
@@ -257,6 +273,69 @@ function IntegrityReportTab() {
     loadTabData()
     return () => controller.abort()
   }, [refreshReportData])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function refresh() {
+      try {
+        await refreshReportData(controller.signal, recentPage)
+      } catch (error) {
+        if (error.name === 'AbortError') return
+        const message = error instanceof ApiError
+          ? error.message
+          : '검증 결과를 불러오지 못했습니다.'
+        setVerificationNotice({ tone: 'danger', message })
+      }
+    }
+
+    refresh()
+    const intervalId = window.setInterval(refresh, REPORT_REFRESH_INTERVAL_MS)
+    return () => {
+      controller.abort()
+      window.clearInterval(intervalId)
+    }
+  }, [recentPage, refreshReportData])
+
+  useEffect(() => {
+    if (!detailResult) return undefined
+    const controller = new AbortController()
+
+    async function loadViolations() {
+      setDetailLoading(true)
+      setDetailError(null)
+      try {
+        const response = await getConsistencyViolations(
+          detailResult.id,
+          detailViolationPage,
+          VIOLATION_PAGE_SIZE,
+          controller.signal,
+        )
+        setDetailViolations(response)
+      } catch (error) {
+        if (error.name === 'AbortError') return
+        setDetailError(error instanceof ApiError ? error.message : '위반 상세를 불러오지 못했습니다.')
+      } finally {
+        if (!controller.signal.aborted) setDetailLoading(false)
+      }
+    }
+
+    loadViolations()
+    return () => controller.abort()
+  }, [detailResult, detailViolationPage])
+
+  function openViolationDetail(result) {
+    setDetailViolationPage(0)
+    setDetailViolations(null)
+    setDetailError(null)
+    setDetailResult(result)
+  }
+
+  function closeViolationDetail() {
+    setDetailResult(null)
+    setDetailViolations(null)
+    setDetailError(null)
+  }
 
   function selectScope(scopeType) {
     setSelectedScope(scopeType)
@@ -314,7 +393,7 @@ function IntegrityReportTab() {
           message: `전체 데이터 검증이 접수되었습니다. 작업 ID: ${response.jobExecutionId}`,
         })
       } else {
-        await refreshReportData()
+        await refreshReportData(undefined, recentPage)
         setVerificationNotice({
           tone: 'success',
           message: `선택한 검사 ${response.results.length}건을 완료했습니다.`,
@@ -336,7 +415,7 @@ function IntegrityReportTab() {
     setRecoveringResultId(resultId)
     try {
       await recoverConsistency(resultId, methodId)
-      await refreshReportData()
+      await refreshReportData(undefined, recentPage)
     } catch (error) {
       const message = error instanceof ApiError ? error.message : '복구 실행에 실패했습니다.'
       setVerificationNotice({ tone: 'danger', message })
@@ -345,19 +424,28 @@ function IntegrityReportTab() {
     }
   }
 
-  const recentResults = filterResults(results, recentSearchField, recentSearchText).slice(0, RECENT_RESULT_LIMIT)
+  const recentResults = filterResults(recentPageData.content, recentSearchField, recentSearchText)
   const errorResults = filterResults(
     results.filter((item) => item.status === 'ERROR'),
     errorSearchField,
     errorSearchText,
-  ).slice(0, RECENT_RESULT_LIMIT)
+  ).slice(0, RECENT_RESULT_PAGE_SIZE)
   const failResults = filterResults(
     results.filter((item) => item.status === 'FAIL'),
     failSearchField,
     failSearchText,
-  ).slice(0, RECENT_RESULT_LIMIT)
+  ).slice(0, RECENT_RESULT_PAGE_SIZE)
   const filteredRecoveryHistory = filterRecoveryHistory(recoveryHistory, recoverySearchField, recoverySearchText)
   const selectedCatalog = scopeCatalogs[selectedScope]
+  const recentPageGroupStart = Math.floor(recentPageData.page / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE
+  const recentPageGroupEnd = Math.min(
+    recentPageGroupStart + PAGE_GROUP_SIZE,
+    recentPageData.totalPages,
+  )
+  const recentPageNumbers = Array.from(
+    { length: Math.max(0, recentPageGroupEnd - recentPageGroupStart) },
+    (_, index) => recentPageGroupStart + index,
+  )
 
   return (
     <section className="reconciliation-report" aria-labelledby="reconciliation-title">
@@ -553,9 +641,46 @@ function IntegrityReportTab() {
             </tbody>
           </table>
         </div>
-        <p className="data-note">
-          {reportLoading ? '최신 검증 결과를 불러오는 중입니다.' : `검증 결과 ${results.length}건을 조회했습니다.`}
-        </p>
+        <div className="result-pagination">
+          <p className="data-note">
+            {reportLoading
+              ? '최신 검증 결과를 불러오는 중입니다.'
+              : `전체 ${recentPageData.totalElements}건 · ${recentPageData.totalPages === 0 ? 0 : recentPageData.page + 1}/${recentPageData.totalPages} 페이지 · 10초마다 갱신`}
+          </p>
+          <div className="pagination-buttons" aria-label="최근 검증 결과 페이지 이동">
+            <button
+              type="button"
+              className="pagination-group-button"
+              aria-label="이전 10개 페이지"
+              onClick={() => setRecentPage(Math.max(0, recentPageGroupStart - PAGE_GROUP_SIZE))}
+              disabled={reportLoading || recentPageGroupStart === 0}
+            >
+              ‹
+            </button>
+            {recentPageNumbers.map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={page === recentPageData.page ? 'active' : ''}
+                aria-current={page === recentPageData.page ? 'page' : undefined}
+                aria-label={`${page + 1}페이지`}
+                onClick={() => setRecentPage(page)}
+                disabled={reportLoading}
+              >
+                {page + 1}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="pagination-group-button"
+              aria-label="다음 10개 페이지"
+              onClick={() => setRecentPage(recentPageGroupEnd)}
+              disabled={reportLoading || recentPageGroupEnd >= recentPageData.totalPages}
+            >
+              ›
+            </button>
+          </div>
+        </div>
       </section>
 
       <div className="reconciliation-columns">
@@ -633,12 +758,12 @@ function IntegrityReportTab() {
                     <span className={`status-badge ${recoveryMeta.tone}`}>{recoveryMeta.label}</span>
                   </div>
                   <div className="fail-item-diff-row">
-                    <p className="fail-item-diff">위반 {result.violationCount}건 · {formatDiff(result.diffDetail)}</p>
+                    <p className="fail-item-diff">위반 상세 {result.violationCount}건</p>
                     <button
                       type="button"
                       className="text-button"
-                      onClick={() => setDetailResult(result)}
-                      disabled={!result.diffDetail}
+                      onClick={() => openViolationDetail(result)}
+                      disabled={result.violationCount === 0}
                     >
                       자세히 보기
                     </button>
@@ -759,7 +884,7 @@ function IntegrityReportTab() {
           className="coupon-picker-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDetailResult(null)
+            if (event.target === event.currentTarget) closeViolationDetail()
           }}
         >
           <section className="coupon-picker-modal diff-detail-modal" role="dialog" aria-modal="true" aria-labelledby="diff-detail-title">
@@ -769,14 +894,48 @@ function IntegrityReportTab() {
                 <h2 id="diff-detail-title">{CHECK_LABELS[detailResult.checkName] ?? detailResult.checkName}</h2>
                 <p>{scopeLabel(detailResult)} · {formatDate(detailResult.executedAt)} · 위반 {detailResult.violationCount}건</p>
               </div>
-              <button type="button" className="coupon-picker-close" onClick={() => setDetailResult(null)} aria-label="상세 정보 닫기">×</button>
+              <button type="button" className="coupon-picker-close" onClick={closeViolationDetail} aria-label="상세 정보 닫기">×</button>
             </div>
-            {detailResult.diffDetail ? (
-              <pre className="diff-detail-json"><code>{JSON.stringify(detailResult.diffDetail, null, 2)}</code></pre>
+            {detailLoading ? (
+              <p className="catalog-empty">위반 상세를 불러오는 중입니다.</p>
+            ) : detailError ? (
+              <p className="violation-detail-error" role="alert">{detailError}</p>
+            ) : detailViolations?.content.length > 0 ? (
+              <ol className="violation-detail-list">
+                {detailViolations.content.map((violation) => (
+                  <li key={violation.id}>
+                    <div>
+                      <strong>{violation.targetType}</strong>
+                      <span>대상 ID {violation.targetId ?? '-'}</span>
+                      <time dateTime={violation.createdAt}>{formatDate(violation.createdAt)}</time>
+                    </div>
+                    <pre><code>{JSON.stringify(violation.detail, null, 2)}</code></pre>
+                  </li>
+                ))}
+              </ol>
             ) : (
-              <p className="catalog-empty">diffDetail이 없습니다.</p>
+              <p className="catalog-empty">저장된 위반 상세가 없습니다.</p>
             )}
-            <button type="button" className="coupon-picker-cancel" onClick={() => setDetailResult(null)}>닫기</button>
+            {detailViolations && detailViolations.totalPages > 1 && (
+              <div className="result-pagination violation-pagination">
+                <p className="data-note">
+                  전체 {detailViolations.totalElements}건 · {detailViolations.page + 1}/{detailViolations.totalPages} 페이지
+                </p>
+                <div className="pagination-buttons" aria-label="위반 상세 페이지 이동">
+                  <button
+                    type="button"
+                    onClick={() => setDetailViolationPage((page) => Math.max(0, page - 1))}
+                    disabled={detailLoading || detailViolations.page === 0}
+                  >이전</button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailViolationPage((page) => page + 1)}
+                    disabled={detailLoading || !detailViolations.hasNext}
+                  >다음</button>
+                </div>
+              </div>
+            )}
+            <button type="button" className="coupon-picker-cancel" onClick={closeViolationDetail}>닫기</button>
           </section>
         </div>
       )}
