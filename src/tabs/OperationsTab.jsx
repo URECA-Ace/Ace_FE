@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
+import GrafanaMetricCard from '../components/GrafanaMetricCard'
 import { loadRecords, saveRecords } from '../utils/issueRecords'
 
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
@@ -23,6 +24,40 @@ const STATUS_META = {
 function statusMeta(status) {
   return STATUS_META[status] ?? { label: status || '대기', tone: 'neutral' }
 }
+
+const ISSUE_RESULT_OPTIONS = [
+  { value: 'success', label: '성공' },
+  { value: 'fail', label: '실패' },
+]
+
+// coupon.issue 실패 시 reason 태그 값(ErrorCode 이름)과 매칭
+const ISSUE_REASON_OPTIONS = [
+  { value: 'SOLD_OUT', label: '재고 소진' },
+  { value: 'ALREADY_ISSUED', label: '중복 발급' },
+  { value: 'EVENT_NOT_OPEN', label: '오픈 전' },
+  { value: 'EVENT_CLOSED', label: '마감' },
+  { value: 'IDEMPOTENCY_CONFLICT', label: '키 충돌' },
+  { value: 'ISSUE_PERSIST_FAILED', label: '저장 오류' },
+  { value: 'ISSUE_TEMPORARILY_UNAVAILABLE', label: '일시 불가' },
+  { value: 'EVENT_NOT_FOUND', label: '캠페인 없음' },
+]
+
+// coupon.issue.relay 실패 시 reason 태그 값(IssueStreamRelay 문자열 리터럴)과 매칭
+const RELAY_REASON_OPTIONS = [
+  { value: 'CONFIRM_ABANDONED', label: '확정 유실' },
+  { value: 'PERSIST_ABANDONED', label: '저장 유실' },
+]
+
+// coupon.state.change 실패 시 reason 태그 값(ErrorCode 이름)과 매칭
+const STATE_CHANGE_REASON_OPTIONS = [
+  { value: 'ISSUE_NOT_FOUND', label: '발급 내역 없음' },
+  { value: 'INVALID_REQUEST', label: '잘못된 요청' },
+  { value: 'EVENT_NOT_OPEN', label: '오픈 전' },
+  { value: 'ALREADY_EXPIRED', label: '만료됨' },
+  { value: 'ALREADY_USED', label: '이미 사용' },
+  { value: 'NOT_YET_USED', label: '미사용' },
+  { value: 'INVALID_STATE_TRANSITION', label: '상태 전이 불가' },
+]
 
 function eventItem(type, title, detail, tone = 'neutral') {
   return {
@@ -688,6 +723,41 @@ function OperationsTab({
           recentCampaigns={recentCampaigns}
           onStatsChange={setMonitorStats}
         />
+        <div className="metric-card-grid">
+          <GrafanaMetricCard
+            title="쿠폰 발급 현황"
+            description="발급 판정(coupon.issue)과 비동기 저장 확정(coupon.issue.relay) 단계별 성공/실패 추이입니다."
+            panelId={1}
+            variables={{ event_id: operationCampaign?.eventId }}
+            filterGroups={[
+              { name: 'result_issue', label: '발급 판정', options: ISSUE_RESULT_OPTIONS },
+              { name: 'result_relay', label: '비동기 저장 확정', options: ISSUE_RESULT_OPTIONS },
+            ]}
+          />
+          <GrafanaMetricCard
+            title="쿠폰 발급 실패 사유별"
+            description="발급 판정/비동기 저장 단계에서 발생한 실패를 사유(reason)별로 집계합니다."
+            panelId={2}
+            variables={{ event_id: operationCampaign?.eventId }}
+            filterGroups={[
+              { name: 'reason_issue', label: '발급 판정 실패 사유', options: ISSUE_REASON_OPTIONS },
+              { name: 'reason_relay', label: '비동기 저장 실패 사유', options: RELAY_REASON_OPTIONS },
+            ]}
+          />
+          <GrafanaMetricCard
+            title="쿠폰 상태 변경 현황"
+            description="상태 전이(from → to)별 성공 건수 추이입니다."
+            panelId={3}
+          />
+          <GrafanaMetricCard
+            title="쿠폰 상태 변경 실패 사유별"
+            description="상태 변경 실패를 사유(reason)별로 집계합니다."
+            panelId={4}
+            filterGroups={[
+              { name: 'reason_state', label: '실패 사유', options: STATE_CHANGE_REASON_OPTIONS },
+            ]}
+          />
+        </div>
       </>
     )
   }

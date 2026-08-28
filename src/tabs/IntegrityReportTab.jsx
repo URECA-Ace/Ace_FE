@@ -8,6 +8,7 @@ import {
   recoverConsistency,
   verifyConsistency,
 } from '../api/couponApi'
+import GrafanaMetricCard from '../components/GrafanaMetricCard'
 import './IntegrityReportTab.css'
 
 const RECENT_RESULT_LIMIT = 8
@@ -41,6 +42,16 @@ const RECOVERY_STATUS_META = {
   SUCCESS: { label: '복구 완료', tone: 'success' },
   FAIL: { label: '복구 실패', tone: 'danger' },
 }
+
+const SCOPE_LABELS = {
+  EVENT: '이벤트 지정',
+  AS_OF_RANGE: '기간 지정',
+  ALL: '전체',
+}
+
+const CHECK_FILTER_OPTIONS = Object.entries(CHECK_LABELS).map(([value, label]) => ({ value, label }))
+const SCOPE_FILTER_OPTIONS = SCOPE_TYPES.map((value) => ({ value, label: SCOPE_LABELS[value] ?? value }))
+const STATUS_FILTER_OPTIONS = Object.entries(RESULT_STATUS_META).map(([value, meta]) => ({ value, label: meta.label }))
 
 const RESULT_SEARCH_FIELDS = [
   { id: 'checkName', label: '검증 항목' },
@@ -722,6 +733,25 @@ function IntegrityReportTab() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="panel consistency-metrics" aria-labelledby="consistency-metrics-title">
+        <div className="panel-heading">
+          <div>
+            <span className="section-number">05</span>
+            <h2 id="consistency-metrics-title">정합성 검증 지표</h2>
+          </div>
+        </div>
+        <GrafanaMetricCard
+          title="정합성 검증 현황"
+          description="검증 항목(check) · 검증 대상(scope) · 검증 상태(status)별 검증 건수 추이입니다."
+          panelId={5}
+          filterGroups={[
+            { name: 'check', label: '검증 항목', options: CHECK_FILTER_OPTIONS },
+            { name: 'scope', label: '검증 대상', options: SCOPE_FILTER_OPTIONS },
+            { name: 'status', label: '검증 상태', options: STATUS_FILTER_OPTIONS },
+          ]}
+        />
       </section>
 
       {detailResult && (
