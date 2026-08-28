@@ -36,8 +36,15 @@ function eventItem(type, title, detail, tone = 'neutral') {
 }
 
 function mergeStatus(record, data, source = 'POLL') {
-  const hasChanged = record.status !== data.status
-  const meta = statusMeta(data.status)
+  const previousStatus = record.status
+  const nextStatus = data.status
+
+  if ((previousStatus === 'USED' || previousStatus === 'EXPIRED') && nextStatus === 'ISSUED') {
+    return { ...record, lastCheckedAt: new Date().toISOString() }
+  }
+
+  const hasChanged = previousStatus !== nextStatus
+  const meta = statusMeta(nextStatus)
 
   return {
     ...record,
@@ -48,7 +55,7 @@ function mergeStatus(record, data, source = 'POLL') {
           eventItem(
             source,
             meta.label,
-            `처리 상태가 ${data.status}(으)로 변경되었습니다.`,
+            `처리 상태가 ${nextStatus}(으)로 변경되었습니다.`,
             meta.tone,
           ),
           ...record.events,
@@ -603,9 +610,27 @@ function OperationsTab({
 
           <div className="action-area">
             <div className="action-heading">
-              <strong>상태 변경 이벤트</strong>
+              <strong>상태 변경 내역</strong>
               <span>PATCH /api/v1/coupons/{'{issueId}'}/use · cancel</span>
             </div>
+
+            {selected.events && selected.events.length > 0 && (
+              <ol className="timeline" style={{ margin: '16px 0', padding: 0 }}>
+                {selected.events.filter(e => e.type === 'STATE_CHANGE' || e.type === 'EXPIRED').map((ev) => (
+                  <li key={ev.id} className={ev.tone}>
+                    <span className="timeline-dot" />
+                    <div>
+                      <div className="timeline-title">
+                        <strong>{ev.title}</strong>
+                        <time>{formatDate(ev.occurredAt)}</time>
+                      </div>
+                      <p>{ev.detail}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+
             <div className="action-buttons">
               <button
                 type="button"
