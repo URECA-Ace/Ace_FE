@@ -806,29 +806,36 @@ function OperationsTab({
               <span className="section-number">03</span>
               <h2>발급 이력</h2>
             </div>
-            {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
+            <div className="panel-heading-actions">
+              {records.length > 0 && <button className="text-button" type="button" onClick={clearRecords}>기록 비우기</button>}
+            </div>
           </div>
-          <div className="history-scope-tabs" role="tablist" aria-label="발급 이력 조회 범위">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={historyScope === 'all'}
-              className={historyScope === 'all' ? 'selected' : ''}
-              onClick={() => setHistoryScope('all')}
-            >
-              전체
-              <span>{records.length.toLocaleString()}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={historyScope === 'current'}
-              className={historyScope === 'current' ? 'selected' : ''}
-              onClick={() => setHistoryScope('current')}
-            >
-              현재 쿠폰
-              <span>{currentCampaignRecords.length.toLocaleString()}</span>
-            </button>
+          <div className="history-scope-bar">
+            <div className="history-scope-tabs" role="tablist" aria-label="발급 이력 조회 범위">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'all'}
+                className={historyScope === 'all' ? 'selected' : ''}
+                onClick={() => setHistoryScope('all')}
+              >
+                전체
+                <span>{records.length.toLocaleString()}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={historyScope === 'current'}
+                className={historyScope === 'current' ? 'selected' : ''}
+                onClick={() => setHistoryScope('current')}
+              >
+                현재 쿠폰
+                <span>{currentCampaignRecords.length.toLocaleString()}</span>
+              </button>
+            </div>
+            <span className="api-chip subtle">
+              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
+            </span>
           </div>
           <div className="table-wrap history-table-wrap">
             <table>
@@ -874,9 +881,6 @@ function OperationsTab({
               <span className="section-number">04</span>
               <h2>쿠폰 상태 이력</h2>
             </div>
-            <span className="api-chip subtle">
-              {selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '쿠폰 선택 대기'}
-            </span>
           </div>
           {statusHistoryRecords.length > 0 || campaignHasStarted || campaignHasClosed ? (
             <ol className="timeline">
