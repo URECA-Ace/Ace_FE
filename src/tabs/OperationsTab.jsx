@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon, cancelCoupon, getCouponIssueId } from '../api/couponApi'
+import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
+import { loadRecords, saveRecords } from '../utils/issueRecords'
 
-const STORAGE_KEY = 'ace-manager-issue-records'
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
 
 const STATUS_META = {
@@ -18,15 +18,6 @@ const STATUS_META = {
   REJECTED_NOT_OPEN: { label: '오픈 전', tone: 'neutral' },
   REJECTED_CLOSED: { label: '마감', tone: 'neutral' },
   REQUEST_FAILED: { label: '요청 실패', tone: 'danger' },
-}
-
-export function loadRecords() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
-  } catch {
-    return []
-  }
 }
 
 function statusMeta(status) {
@@ -73,7 +64,6 @@ function OperationsTab({
   eventId,
   setEventId,
   recentCampaigns,
-  openCampaigns,
   operationCampaign,
   setOperationCampaign,
   setNotice,
@@ -154,7 +144,7 @@ function OperationsTab({
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+      saveRecords(records)
     } catch {
       // 저장 공간이 제한된 환경에서도 API 시연 기능은 계속 동작한다.
     }
@@ -372,7 +362,7 @@ function OperationsTab({
       }
 
       const idempotencyKey = crypto.randomUUID()
-      const data = await useCoupon(realIssueId, selected.userId, idempotencyKey, 'PAYMENT_USED')
+      const data = await requestCouponUse(realIssueId, selected.userId, idempotencyKey, 'PAYMENT_USED')
       updateRecords((current) =>
         current.map((record) =>
           record.id === selected.id

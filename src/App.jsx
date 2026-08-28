@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, getCoupons, getIssuanceStats, getRecentCouponEvents, issueCoupon } from './api/couponApi'
 import CampaignManagementTab from './tabs/CampaignManagementTab'
-import OperationsTab, { loadRecords } from './tabs/OperationsTab'
+import OperationsTab from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
+import { loadRecords } from './utils/issueRecords'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
