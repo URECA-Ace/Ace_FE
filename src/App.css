@@ -547,6 +547,117 @@ h1 {
   grid-template-columns: 1.3fr 0.8fr;
 }
 
+.metric-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.grafana-metric-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.grafana-metric-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.grafana-metric-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.grafana-metric-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.grafana-metric-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.grafana-interval-select {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.grafana-interval-select select {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+}
+
+.grafana-metric-filters {
+  display: grid;
+  gap: 8px;
+}
+
+.grafana-filter-group {
+  display: grid;
+  gap: 6px;
+}
+
+.grafana-filter-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.grafana-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.grafana-filter-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.grafana-filter-chip:hover {
+  border-color: rgba(230, 0, 126, 0.4);
+}
+
+.grafana-filter-chip.active {
+  border-color: var(--magenta);
+  color: var(--magenta-dark);
+  background: rgba(230, 0, 126, 0.06);
+}
+
+.grafana-metric-frame {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+}
+
 .panel {
   min-width: 0;
   padding: 22px;
@@ -3058,6 +3169,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 760px) {
+  .metric-card-grid {
+    grid-template-columns: 1fr;
+  }
+
   .app-shell {
     display: block;
   }
