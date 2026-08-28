@@ -2951,7 +2951,7 @@ tbody tr:hover {
   padding: 0 0 18px 22px;
 }
 
-.timeline li:not(:last-child)::before {
+.timeline > li:not(:last-child)::before {
   content: '';
   position: absolute;
   left: 4px;
@@ -3007,6 +3007,81 @@ tbody tr:hover {
   font-size: 9px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.timeline-issue > div {
+  min-width: 0;
+}
+
+.timeline-branch {
+  position: relative;
+  margin: 13px 0 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+
+.timeline-branch::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 18px;
+  width: 1px;
+  background: #e3dee5;
+}
+
+.timeline .timeline-branch li {
+  min-height: 29px;
+  padding: 0 0 12px 16px;
+}
+
+.timeline .timeline-branch li:last-child {
+  padding-bottom: 0;
+}
+
+.timeline .timeline-branch li::before {
+  content: none;
+}
+
+.timeline .timeline-branch li::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 9px;
+  width: 20px;
+  height: 1px;
+  background: #e3dee5;
+}
+
+.timeline-branch .timeline-dot {
+  left: 0;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  border-width: 1px;
+}
+
+.timeline-branch li:last-child .timeline-dot {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #dcd6df;
+}
+
+.timeline .timeline-branch li.used .timeline-dot {
+  background: #2f80c9;
+  box-shadow: 0 0 0 3px rgba(47, 128, 201, 0.12);
+}
+
+.timeline .timeline-branch li.cancelled .timeline-dot {
+  background: #e5a214;
+  box-shadow: 0 0 0 3px rgba(229, 162, 20, 0.12);
+}
+
+.timeline-branch .timeline-title strong {
+  font-size: 10px;
+}
+
+.timeline-branch .timeline-title time,
+.timeline-branch p {
+  font-size: 8px;
 }
 
 @media (max-width: 1180px) {

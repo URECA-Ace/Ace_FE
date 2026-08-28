@@ -898,17 +898,42 @@ function OperationsTab({
                   </div>
                 </li>
               ) : (
-                <li key={`${record.id}:${record.issueSequence}`} className="success">
-                  <span className="timeline-dot" />
-                  <div>
-                    <div className="timeline-title">
-                      <strong>Redis 판정 승인 · 발급 순번 {record.issueSequence}</strong>
-                      <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
+                <li key={record.id} className="timeline-issue success">
+                    <span className="timeline-dot" />
+                    <div>
+                      <div className="timeline-title">
+                        <strong>발급 완료 · 발급 순번 {record.issueSequence}</strong>
+                        <time>{formatDate(record.acceptedAt ?? record.lastCheckedAt)}</time>
+                      </div>
+                      <p>
+                        사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
+                      </p>
+                      {record.events?.some((event) => (
+                        event.type === 'STATE_CHANGE' || event.type === 'EXPIRED'
+                      )) && (
+                        <ol className="timeline-branch">
+                          {[...record.events].filter((event) => (
+                            event.type === 'STATE_CHANGE' || event.type === 'EXPIRED'
+                          )).reverse().map((event) => (
+                            <li
+                              key={event.id}
+                              className={event.title === '쿠폰 사용 처리'
+                                ? 'used'
+                                : event.title === '쿠폰 사용 취소' ? 'cancelled' : event.tone}
+                            >
+                              <span className="timeline-dot" />
+                              <div>
+                                <div className="timeline-title">
+                                  <strong>{event.title}</strong>
+                                  <time>{formatDate(event.occurredAt)}</time>
+                                </div>
+                                <p>{event.detail}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
                     </div>
-                    <p>
-                      사용자 ID({record.userId}) · 잔여 {record.remainingStock?.toLocaleString() ?? '-'}장
-                    </p>
-                  </div>
                 </li>
               ))}
               {campaignHasStarted && (

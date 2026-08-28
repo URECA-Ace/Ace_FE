@@ -319,7 +319,7 @@ function App() {
   }
 
   useEffect(() => {
-    if (!notice?.toast) return undefined
+    if (!notice) return undefined
 
     const timer = window.setTimeout(() => setNotice(null), 5000)
     return () => window.clearTimeout(timer)
