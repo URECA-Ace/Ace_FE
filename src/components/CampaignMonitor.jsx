@@ -203,11 +203,6 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
     monitoringActiveRef.current = false
     requestInFlightRef.current = false
     setMonitoredEventId(null)
-    setStats(null)
-    onStatsChange?.(null)
-    setIssuanceLogs([])
-    logCursorRef.current = 0
-    setError(null)
     pollingControllerRef.current?.abort()
     pollingControllerRef.current = null
     if (pollingIntervalRef.current !== null) {
@@ -236,7 +231,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
   const selectedCampaign = recentCampaigns.find(
     (campaign) => String(campaign.eventId) === String(effectiveEventId),
   )
-  const visibleStats = polling ? stats : null
+  const visibleStats = stats
   const statusMeta = CAMPAIGN_STATUS[visibleStats?.status] ?? {
     label: '조회 대기',
     tone: 'idle',
