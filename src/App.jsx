@@ -4,6 +4,7 @@ import CampaignManagementTab from './tabs/CampaignManagementTab'
 import OperationsTab from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
+import IssueFailureTab from './tabs/IssueFailureTab'
 import { loadRecords } from './utils/issueRecords'
 import './App.css'
 
@@ -476,6 +477,14 @@ function App() {
             쿠폰 관리
           </button>
           <button
+            className={`nav-item ${activeTab === 'failures' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveTab('failures')}
+          >
+            <span className="nav-icon">⚑</span>
+            발급 실패
+          </button>
+          <button
             className={`nav-item ${activeTab === 'integrity' ? 'active' : ''}`}
             type="button"
             onClick={() => setActiveTab('integrity')}
@@ -656,6 +665,8 @@ function App() {
             </section>
           </div>
         )}
+
+        {activeTab === 'failures' && <IssueFailureTab />}
 
         {activeTab === 'integrity' && <IntegrityReportTab />}
       </main>

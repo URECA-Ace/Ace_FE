@@ -286,3 +286,48 @@ export function expireCoupon(issueId, userId, idempotencyKey, reason, signal) {
     body: JSON.stringify({ userId, reason }),
   })
 }
+
+export function getIssueFailures({ eventId, stage, status, requestId, page = 0, size = 20 } = {}, signal) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  if (eventId) query.set('eventId', String(eventId))
+  if (stage) query.set('stage', stage)
+  if (status) query.set('status', status)
+  if (requestId) query.set('requestId', requestId)
+
+  return request(`/api/v1/issue-failures?${query}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getIssueFailureSummary(signal) {
+  return request('/api/v1/issue-failures/summary', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function getIssueFailureDetail(failureId, signal) {
+  return request(`/api/v1/issue-failures/${failureId}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function executeIssueFailureAction(failureId, action, payload = {}, signal) {
+  return request(`/api/v1/issue-failures/${failureId}/actions/${action}`, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}

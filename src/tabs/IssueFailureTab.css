@@ -1,0 +1,302 @@
+.failure-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.failure-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 1px solid rgba(214, 69, 69, 0.36);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff 0%, #fdf3f3 100%);
+}
+
+.failure-blocked strong {
+  font-size: 15px;
+}
+
+.failure-blocked span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.failure-blocked.clear {
+  border-color: rgba(21, 168, 116, 0.32);
+  background: linear-gradient(135deg, #fff 0%, #f3fcf8 100%);
+}
+
+.failure-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.failure-summary-card {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.failure-summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.failure-summary-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.failure-summary-card dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.failure-summary-card dd {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.failure-summary-card .danger dd {
+  color: #d64545;
+}
+
+.failure-summary-card .waiting dd {
+  color: #b8860b;
+}
+
+.failure-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.failure-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.failure-filters input,
+.failure-filters select {
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.failure-status-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.failure-status-tab {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.failure-status-tab.active {
+  background: var(--accent, #19151d);
+  color: #fff;
+  font-weight: 600;
+}
+
+.failure-table {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.failure-table-columns,
+.failure-table-list button {
+  display: grid;
+  grid-template-columns: 100px 70px 100px 110px 1fr 60px 160px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 18px;
+  text-align: left;
+}
+
+.failure-table-columns {
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: rgba(25, 21, 29, 0.02);
+}
+
+.failure-table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.failure-table-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.failure-table-list button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.failure-table-list button:hover {
+  background: rgba(25, 21, 29, 0.03);
+}
+
+.failure-result {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failure-empty {
+  margin: 0;
+  padding: 40px 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.failure-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.failure-pagination button {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.failure-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.failure-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(214, 69, 69, 0.1);
+  color: #b23b3b;
+  font-size: 13px;
+}
+
+.failure-detail-modal {
+  width: min(680px, 100%);
+}
+
+.failure-detail-fields {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.failure-detail-fields div {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.failure-detail-fields dt {
+  color: var(--muted);
+}
+
+.failure-detail-fields dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.failure-detail-error-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.failure-detail-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(25, 21, 29, 0.04);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.failure-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.failure-action-fields {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px;
+}
+
+.failure-action-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.failure-action-fields input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.failure-action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.failure-no-action {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
