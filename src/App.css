@@ -1256,6 +1256,23 @@ h1 {
 
 .campaign-initialization {
   margin-bottom: 16px;
+  border-color: #e7dce4;
+  background: linear-gradient(135deg, #fff 0%, #fffafb 100%);
+}
+
+.campaign-initialization .panel-heading {
+  align-items: flex-start;
+}
+
+.admin-only-chip {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #ead5df;
+  border-radius: 6px;
+  color: #9a4868;
+  background: #fff3f7;
+  font: 800 9px/1 Manrope, sans-serif;
+  letter-spacing: 0.8px;
 }
 
 .initialization-layout {
@@ -1268,6 +1285,24 @@ h1 {
 .initialization-copy strong {
   color: var(--ink);
   font-size: 13px;
+}
+
+.initialization-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.initialization-warning > span {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #c45a78;
+  font: 800 11px/1 Manrope, sans-serif;
 }
 
 .initialization-copy p {
@@ -1311,6 +1346,39 @@ h1 {
   margin-top: 0;
   padding-block: 0;
   font-size: 11px;
+}
+
+.initialization-submit {
+  grid-column: auto;
+  height: 40px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.initialization-target {
+  margin-top: 9px;
+  padding: 9px 10px;
+  border-left: 2px solid #d49ab0;
+  background: rgba(255, 243, 247, 0.72);
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 8px;
+}
+
+.initialization-target span,
+.initialization-target small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.initialization-target strong {
+  color: #9a4868;
+  font-size: 10px;
+  text-align: right;
+}
+
+.initialization-target small {
+  grid-column: 1 / -1;
 }
 
 .initialization-result {

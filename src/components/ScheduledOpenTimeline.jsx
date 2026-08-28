@@ -11,9 +11,12 @@ function ScheduledOpenTimeline({ campaigns, closingEventId, formatDate, onClose 
   return (
     <section className="status-transition-list" aria-labelledby="campaign-schedule-title">
       <div className="transition-heading">
-        <div>
-          <strong id="campaign-schedule-title">예약 오픈 일정 · 상태 관리</strong>
-          <small>최근 발급 회차의 일정과 현재 상태를 한곳에서 관리합니다.</small>
+        <div className="transition-heading-copy">
+          <span className="section-number">03</span>
+          <div>
+            <strong id="campaign-schedule-title">예약 오픈 일정 · 상태 관리</strong>
+            <small>최근 발급 회차의 일정과 현재 상태를 한곳에서 관리합니다.</small>
+          </div>
         </div>
         <span>RECENT COUPONS</span>
       </div>

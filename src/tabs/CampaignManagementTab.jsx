@@ -81,6 +81,9 @@ function CampaignManagementTab({
     : null) ?? createdCoupon
   const nextCouponRound = couponRounds[selectedCouponId] ?? 1
   const campaignCandidates = recentCampaigns
+  const selectedInitializationCampaign = campaignCandidates.find(
+    (campaign) => String(campaign.eventId) === String(initializationEventId),
+  )
 
   const [previousRecentCampaigns, setPreviousRecentCampaigns] = useState(recentCampaigns)
   if (recentCampaigns !== previousRecentCampaigns) {
@@ -360,7 +363,7 @@ function CampaignManagementTab({
         <section className="panel coupon-create-panel" aria-labelledby="coupon-create-title">
           <div className="panel-heading">
             <div>
-              <span className="section-number">00</span>
+              <span className="section-number">01</span>
               <h2 id="coupon-create-title">쿠폰 상품 생성</h2>
               <p className="panel-description">발급할 쿠폰의 기본 정보와 혜택을 먼저 등록합니다.</p>
             </div>
@@ -406,7 +409,7 @@ function CampaignManagementTab({
         <section className="panel event-create-panel" aria-labelledby="event-create-title">
           <div className="panel-heading">
             <div>
-              <span className="section-number">01</span>
+              <span className="section-number">02</span>
               <h2 id="event-create-title">발급 회차와 예약 오픈 생성</h2>
               <p className="panel-description">쿠폰을 선택하고 재고와 발급 시작 방식을 설정해 회차를 만듭니다.</p>
             </div>
@@ -513,37 +516,50 @@ function CampaignManagementTab({
         <section className="panel campaign-initialization" aria-labelledby="campaign-initialization-title">
           <div className="panel-heading">
             <div>
-              <span className="section-number">02</span>
+              <span className="section-number">00</span>
               <h2 id="campaign-initialization-title">Redis 쿠폰 초기화 복구 · 장애 대응 전용</h2>
+              <p className="panel-description">생성 응답에서 Redis 초기화 실패가 확인된 회차만 복구합니다.</p>
             </div>
+            <span className="admin-only-chip">ADMIN ONLY</span>
           </div>
           <div className="initialization-layout">
             <div className="initialization-copy">
-              <strong>일반 발급에서는 실행하지 않습니다.</strong>
+              <div className="initialization-warning">
+                <span aria-hidden="true">!</span>
+                <strong>일반 발급에서는 실행하지 않습니다.</strong>
+              </div>
               <p>
-                위의 쿠폰 생성 기능이 DB 저장과 Redis 초기화를 함께 처리합니다.
+                위의 쿠폰 생성 기능이 DB 저장과 Redis 초기화를 함께 처리합니다.<br />
                 이 기능은 생성 응답이 초기화 실패로 끝난 경우에만 사용합니다.
-                백엔드에서 <code>coupon.issue.admin.enabled=true</code>로 노출한 시연 환경에서만 동작합니다.
               </p>
             </div>
             <form className="initialization-form" onSubmit={initializeEvent}>
-              <label>초기화할 쿠폰</label>
+              <label htmlFor="initialization-campaign">복구할 발급 회차</label>
               <div>
                 <button
                   type="button"
                   className="coupon-picker-trigger campaign-picker-trigger"
                   onClick={() => setCampaignPickerOpen(true)}
+                  id="initialization-campaign"
                   aria-haspopup="dialog"
                   aria-expanded={campaignPickerOpen}
                 >
                   <span className="coupon-picker-trigger-icon" aria-hidden="true">⌕</span>
-                  <span>{campaignLabel(recentCampaigns.find((campaign) => String(campaign.eventId) === String(initializationEventId)))}</span>
+                  <span>{campaignLabel(selectedInitializationCampaign)}</span>
                   <span className="coupon-picker-trigger-arrow" aria-hidden="true">›</span>
                 </button>
-                <button className="secondary-button" type="submit" disabled={initializingCampaign || !initializationEventId}>
+                <button className="primary-button initialization-submit" type="submit" disabled={initializingCampaign || !initializationEventId}>
                   {initializingCampaign ? 'Redis 재초기화 중…' : 'Redis 재초기화 실행'}
+                  <span>→</span>
                 </button>
               </div>
+              {selectedInitializationCampaign && (
+                <div className="initialization-target" aria-live="polite">
+                  <span>선택된 회차</span>
+                  <strong>{selectedInitializationCampaign.status ?? '상태 확인 필요'}</strong>
+                  <small>재고 {selectedInitializationCampaign.totalStock?.toLocaleString() ?? '-'}장 · {formatDate(selectedInitializationCampaign.openAt)} 오픈</small>
+                </div>
+              )}
             </form>
           </div>
           {initializationResult && (

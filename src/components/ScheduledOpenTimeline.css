@@ -18,6 +18,16 @@
   margin-bottom: 18px;
 }
 
+.transition-heading-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.transition-heading-copy > .section-number {
+  margin-top: 2px;
+}
+
 .transition-heading strong,
 .transition-heading small {
   display: block;
