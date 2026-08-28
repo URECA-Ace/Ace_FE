@@ -354,7 +354,8 @@ function OperationsTab({
     try {
       let realIssueId = selected.issueId
       if (!realIssueId && selected.eventId && selected.userId) {
-        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+        const lookup = await getCouponIssueId(selected.eventId, selected.userId)
+        realIssueId = lookup.issueId
       }
       if (!realIssueId) {
         setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
@@ -413,7 +414,8 @@ function OperationsTab({
     try {
       let realIssueId = selected.issueId
       if (!realIssueId && selected.eventId && selected.userId) {
-        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+        const lookup = await getCouponIssueId(selected.eventId, selected.userId)
+        realIssueId = lookup.issueId
       }
       if (!realIssueId) {
         setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
