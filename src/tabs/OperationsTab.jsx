@@ -743,8 +743,16 @@ function OperationsTab({
               <div className="coupon-brand">U<sup>+</sup></div>
               <div className="coupon-copy">
                 <span>FREEDOM DAY</span>
-                <strong>{selectedIssueCampaign?.couponName ?? '데이터 하루 무제한'}</strong>
-                <small>{selectedIssueCampaign ? campaignLabel(selectedIssueCampaign) : '최근 발급 회차를 선택하세요'}</small>
+                <strong>
+                  {selectedIssueCampaign
+                    ? `${selectedIssueCampaign.couponName ?? '쿠폰'} (${selectedIssueCampaign.round ?? '-'}회차)`
+                    : '데이터 하루 무제한 쿠폰'}
+                </strong>
+                <small>
+                  {selectedIssueCampaign
+                    ? '추가된 쿠폰으로 즐거운 시간 보내세요.'
+                    : '최근 발급 회차를 선택하세요'}
+                </small>
               </div>
               <div className="coupon-badge">24H</div>
               <span className="coupon-preview-hint">
