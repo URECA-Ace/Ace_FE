@@ -605,7 +605,7 @@ function App() {
                   <span>02</span>
                   <div>
                     <p>ISSUE OPERATIONS</p>
-                    <h2 id="issue-operation-section-title">쿠폰 발급 운영</h2>
+                    <h2 id="issue-operation-section-title">쿠폰 발급 운영 테스트</h2>
                   </div>
                 </div>
                 <small>쿠폰 발급 · 발급 이력 · 쿠폰 상태 이력</small>
