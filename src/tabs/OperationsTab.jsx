@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon } from '../api/couponApi'
+import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon, cancelCoupon, getCouponIssueId } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
 
 const STORAGE_KEY = 'ace-manager-issue-records'
@@ -9,6 +9,8 @@ const STATUS_META = {
   ACCEPTED: { label: '발급 승인', tone: 'waiting' },
   PROCESSING: { label: '저장 처리 중', tone: 'waiting' },
   ISSUED: { label: '발급 완료', tone: 'success' },
+  USED: { label: '사용 완료', tone: 'neutral' },
+  EXPIRED: { label: '기간 만료', tone: 'danger' },
   FAILED: { label: '저장 실패', tone: 'danger' },
   COMPENSATED: { label: '재고 원복', tone: 'neutral' },
   REJECTED_SOLD_OUT: { label: '재고 소진', tone: 'danger' },
@@ -366,6 +368,124 @@ function OperationsTab({
     setNotice({ tone: 'neutral', message: '브라우저에 저장된 시연 기록을 비웠습니다.' })
   }
 
+  async function handleUseCoupon() {
+    if (!selected) return
+    setSubmitting(true)
+    setNotice(null)
+    try {
+      let realIssueId = selected.issueId
+      if (!realIssueId && selected.eventId && selected.userId) {
+        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+      }
+      if (!realIssueId) {
+        setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
+        return
+      }
+
+      const idempotencyKey = crypto.randomUUID()
+      const data = await useCoupon(realIssueId, selected.userId, idempotencyKey, 'PAYMENT_USED')
+      updateRecords((current) =>
+        current.map((record) =>
+          record.id === selected.id
+            ? {
+                ...record,
+                issueId: realIssueId,
+                status: data.currentStatus,
+                lastCheckedAt: new Date().toISOString(),
+                events: [
+                  eventItem('STATE_CHANGE', '쿠폰 사용 처리', `${data.previousStatus} → ${data.currentStatus}`, 'success'),
+                  ...record.events,
+                ],
+              }
+            : record,
+        ),
+      )
+      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 처리가 완료되었습니다.` })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
+      if (isExpired) {
+        updateRecords((current) =>
+          current.map((record) =>
+            record.id === selected.id
+              ? {
+                  ...record,
+                  status: 'EXPIRED',
+                  lastCheckedAt: new Date().toISOString(),
+                  events: [
+                    eventItem('EXPIRED', '쿠폰 만료 확인', '유효기간이 만료되어 사용이 불가합니다.', 'danger'),
+                    ...record.events,
+                  ],
+                }
+              : record,
+          ),
+        )
+      }
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCancelCoupon() {
+    if (!selected) return
+    setSubmitting(true)
+    setNotice(null)
+    try {
+      let realIssueId = selected.issueId
+      if (!realIssueId && selected.eventId && selected.userId) {
+        realIssueId = await getCouponIssueId(selected.eventId, selected.userId)
+      }
+      if (!realIssueId) {
+        setNotice({ tone: 'danger', message: 'DB에 저장된 쿠폰 정보를 찾을 수 없습니다.' })
+        return
+      }
+
+      const idempotencyKey = crypto.randomUUID()
+      const data = await cancelCoupon(realIssueId, selected.userId, idempotencyKey, 'ORDER_CANCELED')
+      updateRecords((current) =>
+        current.map((record) =>
+          record.id === selected.id
+            ? {
+                ...record,
+                issueId: realIssueId,
+                status: data.currentStatus,
+                lastCheckedAt: new Date().toISOString(),
+                events: [
+                  eventItem('STATE_CHANGE', '쿠폰 사용 취소', `${data.previousStatus} → ${data.currentStatus}`, 'waiting'),
+                  ...record.events,
+                ],
+              }
+            : record,
+        ),
+      )
+      setNotice({ tone: 'success', message: `쿠폰 #${realIssueId} 사용 취소(재사용 원복)가 완료되었습니다.` })
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      const isExpired = apiError.code === 'ALREADY_EXPIRED' || apiError.code === 'COUPON_EXPIRED' || (apiError.message && apiError.message.includes('만료'))
+      if (isExpired) {
+        updateRecords((current) =>
+          current.map((record) =>
+            record.id === selected.id
+              ? {
+                  ...record,
+                  status: 'EXPIRED',
+                  lastCheckedAt: new Date().toISOString(),
+                  events: [
+                    eventItem('EXPIRED', '쿠폰 만료 확인', '유효기간이 만료된 쿠폰입니다.', 'danger'),
+                    ...record.events,
+                  ],
+                }
+              : record,
+          ),
+        )
+      }
+      setNotice({ tone: 'danger', message: errorLabels[apiError.code] ?? apiError.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const selectedMeta = statusMeta(selected?.status)
 
   const userControlPanel = (
@@ -488,12 +608,34 @@ function OperationsTab({
           <div className="action-area">
             <div className="action-heading">
               <strong>상태 변경 이벤트</strong>
-              <span>백엔드 API 연결 대기</span>
+              <span>PATCH /api/v1/coupons/{'{issueId}'}/use · cancel</span>
             </div>
             <div className="action-buttons">
-              <button type="button" disabled title="사용 처리 API가 필요합니다.">사용 처리</button>
-              <button type="button" disabled title="사용 취소 API가 필요합니다.">사용 취소</button>
-              <button type="button" disabled title="만료 처리 API가 필요합니다.">만료 처리</button>
+              <button
+                type="button"
+                onClick={handleUseCoupon}
+                disabled={submitting || selected?.status !== 'ISSUED'}
+                title="ISSUED → USED 상태 전이"
+              >
+                사용 처리
+              </button>
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={handleCancelCoupon}
+                disabled={submitting || selected?.status !== 'USED'}
+                title="USED → ISSUED 상태 원복"
+              >
+                사용 취소
+              </button>
+              <button
+                type="button"
+                className={`expired-btn ${selected?.status === 'EXPIRED' ? 'active' : ''}`}
+                disabled
+                title={selected?.status === 'EXPIRED' ? '유효기간이 만료된 쿠폰입니다.' : '만료는 백그라운드 스케줄러가 자동으로 처리합니다.'}
+              >
+                {selected?.status === 'EXPIRED' ? '기간 만료' : '자동 만료'}
+              </button>
             </div>
             {selected.status === 'REQUEST_FAILED' && (
               <button

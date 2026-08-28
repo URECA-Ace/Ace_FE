@@ -3074,3 +3074,77 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.action-area {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fdfbfe;
+  border: 1px solid #f0ebf2;
+}
+
+.action-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.action-heading strong {
+  font-size: 11px;
+  color: #3b333e;
+}
+
+.action-heading span {
+  color: #a098a3;
+  font-size: 8px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.action-buttons button {
+  padding: 8px 5px;
+  border: 1px solid #e5e0e7;
+  border-radius: 8px;
+  color: #a19aa4;
+  background: #f5f3f6;
+  font-size: 9px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.action-buttons button:not(:disabled) {
+  color: #ffffff;
+  background: #e6007e;
+  border-color: #e6007e;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(230, 0, 126, 0.35);
+}
+
+.action-buttons button:not(:disabled):hover {
+  background: #cc006f;
+  transform: translateY(-1px);
+}
+
+.action-buttons button.cancel-btn:not(:disabled) {
+  background: #f57c00;
+  border-color: #f57c00;
+  box-shadow: 0 2px 8px rgba(245, 124, 0, 0.35);
+}
+
+.action-buttons button.cancel-btn:not(:disabled):hover {
+  background: #e65100;
+}
+
+.action-buttons button.expired-btn.active {
+  color: #ffffff;
+  background: #d92654;
+  border-color: #d92654;
+  box-shadow: 0 2px 8px rgba(217, 38, 84, 0.35);
+  opacity: 1;
+}
+
