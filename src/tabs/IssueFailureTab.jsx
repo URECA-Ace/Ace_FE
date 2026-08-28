@@ -23,6 +23,19 @@ const STATUS_TONES = {
   UNRECOVERABLE: 'danger',
 }
 
+// 서버가 내려주는 조치 결과. 재시도 결과와 종결 시 확인한 저장 상태를 함께 담는다.
+const OUTCOME_LABELS = {
+  RESOLVED: '재고를 되돌렸습니다.',
+  ALREADY_RESOLVED: '이미 회수된 건이었습니다.',
+  SKIPPED_PERSISTED: '저장이 확인되어 확정으로 해소했습니다.',
+  EXPIRED: '요청 기록이 사라져 되돌릴 수 없습니다.',
+  NOT_RETRYABLE: '되돌릴 수 있는 상태가 아닙니다.',
+  RETRY_FAILED: '재시도에 실패했습니다. 잠시 후 다시 시도하세요.',
+  PERSISTED: '종결했습니다. 종결 시점에 발급 건이 저장되어 있었습니다.',
+  ABSENT: '종결했습니다. 종결 시점에 발급 건이 저장되어 있지 않았습니다.',
+  UNVERIFIED: '종결했습니다. 저장 여부는 확인하지 못했습니다.',
+}
+
 const STATUS_FILTERS = [
   { value: 'UNRECOVERABLE', label: '확인 필요' },
   { value: 'RETRYABLE', label: '자동 재시도 대기' },
@@ -52,6 +65,7 @@ function IssueFailureTab() {
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
+  const [actionOutcome, setActionOutcome] = useState(null)
   const [actionRunning, setActionRunning] = useState(false)
   const [reason, setReason] = useState('')
   const [operator, setOperator] = useState('')
@@ -98,6 +112,7 @@ function IssueFailureTab() {
   const openDetail = async (failureId) => {
     setDetailLoading(true)
     setActionError(null)
+    setActionOutcome(null)
     setReason('')
     try {
       setDetail(await getIssueFailureDetail(failureId))
@@ -117,11 +132,13 @@ function IssueFailureTab() {
 
     setActionRunning(true)
     setActionError(null)
+    setActionOutcome(null)
     try {
-      await executeIssueFailureAction(detail.summary.failureId, action, {
+      const result = await executeIssueFailureAction(detail.summary.failureId, action, {
         operator: operator.trim() || undefined,
         reason: reason.trim() || undefined,
       })
+      setActionOutcome(OUTCOME_LABELS[result.outcome] ?? `조치 결과: ${result.outcome}`)
       setDetail(await getIssueFailureDetail(detail.summary.failureId))
       setReason('')
       await load()
@@ -414,6 +431,7 @@ function IssueFailureTab() {
                   </p>
                 )}
 
+                {actionOutcome && <p className="failure-outcome" role="status">{actionOutcome}</p>}
                 {actionError && <p className="failure-error" role="alert">{actionError}</p>}
               </>
             )}

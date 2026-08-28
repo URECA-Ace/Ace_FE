@@ -300,3 +300,12 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+.failure-outcome {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(21, 168, 116, 0.1);
+  color: #157a58;
+  font-size: 13px;
+}
