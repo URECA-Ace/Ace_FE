@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { subscribeNotifications } from '../utils/notificationStream'
+import { CHECK_LABELS } from '../constants/consistencyChecks'
 
 const TOAST_DURATION_MS = 6000
 const MAX_VISIBLE_TOASTS = 20
@@ -9,6 +10,10 @@ const MAX_VISIBLE_TOASTS = 20
 const SKIPPED_TOAST_TYPES = new Set(['CONSISTENCY_BATCH_STARTED', 'CONSISTENCY_STEP_STARTED'])
 
 const TONE_ICON = { success: '✓', danger: '!', info: 'i' }
+
+// 개별 VerificationResult의 상태(payload.status). CONSISTENCY_BATCH_COMPLETED의 status는
+// 이 값이 아니라 JobExecution 상태(COMPLETED/FAILED/STOPPED)라 여기 포함하지 않는다.
+const RESULT_STATUS_LABELS = { PASS: '정상', FAIL: '실패', ERROR: '에러' }
 
 // 스케줄러 알림(schedulerName)의 원본 값은 Ace_BE 각 Scheduler 클래스의 SCHEDULER_NAME
 // 상수를 그대로 쓰므로, 영어 원문 대신 한글로 보여주기 위한 매핑.
@@ -23,9 +28,13 @@ const NOTIFICATION_LABELS = {
   ISSUE_FAILED: (payload) => `쿠폰 발급에 실패했습니다. (회차 #${payload.eventId}, 사유: ${payload.reason})`,
   ISSUE_FAILED_BATCH: (payload) =>
     `쿠폰 발급 실패가 다발 발생했습니다. (회차 #${payload.eventId}, 사유: ${payload.reason}, ${payload.count}건, 최근 5초)`,
-  CONSISTENCY_CHECK_FAILED: (payload) => `정합성 검증 실패: ${payload.checkName} (불일치 ${payload.violationCount}건)`,
+  CONSISTENCY_CHECK_FAILED: (payload) =>
+    `정합성 검증 실패: ${CHECK_LABELS[payload.checkName] ?? payload.checkName} (불일치 ${payload.violationCount}건)`,
   COUPON_ISSUANCE_ALL_COMPLETED: (payload) => `쿠폰 전체 발급이 완료되었습니다. (회차 #${payload.eventId})`,
-  CONSISTENCY_STEP_COMPLETED: (payload) => `정합성 검증 Step 완료: ${payload.checkName} (${payload.status})`,
+  // ALL 배치 Step뿐 아니라 EVENT/AS_OF_RANGE 동기 검증도 결과가 저장되면 같은 이벤트를
+  // 받으므로, "Step"처럼 배치 전용 용어 대신 스코프에 상관없이 통용되는 문구를 쓴다.
+  CONSISTENCY_STEP_COMPLETED: (payload) =>
+    `정합성 검증 완료: ${CHECK_LABELS[payload.checkName] ?? payload.checkName} (${RESULT_STATUS_LABELS[payload.status] ?? payload.status})`,
   CONSISTENCY_BATCH_COMPLETED: (payload) => `ALL 정합성 배치가 완료되었습니다. (Step ${payload.stepCount}개, ${payload.status})`,
   SCHEDULER_STARTED: (payload) => `스케줄러가 시작되었습니다: ${SCHEDULER_LABELS[payload.schedulerName] ?? payload.schedulerName}`,
   SCHEDULER_COMPLETED: (payload) => `스케줄러가 완료되었습니다: ${SCHEDULER_LABELS[payload.schedulerName] ?? payload.schedulerName}`,
