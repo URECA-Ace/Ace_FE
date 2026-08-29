@@ -55,6 +55,14 @@ function GrafanaMetricCard({ title, description, panelId, height = 260, filterGr
     })
   }
 
+  function toggleAllOptions(group) {
+    setSelections((prev) => {
+      const allSelected = group.options.every((option) => prev[group.name]?.has(option.value))
+      const next = allSelected ? new Set() : new Set(group.options.map((option) => option.value))
+      return { ...prev, [group.name]: next }
+    })
+  }
+
   const src = useMemo(() => {
     const params = new URLSearchParams({
       orgId: '1',
@@ -107,10 +115,20 @@ function GrafanaMetricCard({ title, description, panelId, height = 260, filterGr
 
       {filterGroups.length > 0 && (
         <div className="grafana-metric-filters">
-          {filterGroups.map((group) => (
+          {filterGroups.map((group) => {
+            const allSelected = group.options.every((option) => selections[group.name]?.has(option.value))
+            return (
             <div key={group.name} className="grafana-filter-group">
               <span className="grafana-filter-label">{group.label}</span>
               <div className="grafana-filter-chips">
+                <button
+                  type="button"
+                  className={`grafana-filter-chip grafana-filter-chip-all ${allSelected ? 'active' : ''}`}
+                  aria-pressed={allSelected}
+                  onClick={() => toggleAllOptions(group)}
+                >
+                  {allSelected ? '전체 해제' : '전체 선택'}
+                </button>
                 {group.options.map((option) => {
                   const active = selections[group.name]?.has(option.value)
                   return (
@@ -127,7 +145,8 @@ function GrafanaMetricCard({ title, description, panelId, height = 260, filterGr
                 })}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

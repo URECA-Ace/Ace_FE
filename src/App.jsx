@@ -1,14 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, getCoupons, getIssuanceStats, getRecentCouponEvents, issueCoupon } from './api/couponApi'
+import {
+  ApiError,
+  getCoupons,
+  getIssuanceStats,
+  getRecentCouponEvents,
+  issueCoupon,
+  stopConsistencyVerification,
+} from './api/couponApi'
 import CampaignManagementTab from './tabs/CampaignManagementTab'
 import OperationsTab from './tabs/OperationsTab'
 import LoadTestTab from './tabs/LoadTestTab'
 import IntegrityReportTab from './tabs/IntegrityReportTab'
 import NotificationToastStack from './components/NotificationToastStack'
+import ConsistencyBatchStatusBanner from './components/ConsistencyBatchStatusBanner'
 import { loadRecords } from './utils/issueRecords'
+import { subscribeNotifications } from './utils/notificationStream'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
+const CONSISTENCY_BATCH_HIDE_AFTER_COMPLETED_MS = 5000
 
 function millisecondsUntilNextCampaignRefresh(now = new Date()) {
   const next = new Date(now)
@@ -131,6 +141,8 @@ function App() {
   const [initialWorkspace] = useState(loadWorkspace)
   const [hasSavedCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons).length > 0)
   const [notice, setNotice] = useState(null)
+  const [consistencyBatch, setConsistencyBatch] = useState(null)
+  const [stoppingConsistencyBatch, setStoppingConsistencyBatch] = useState(false)
   const [issueRecords, setIssueRecords] = useState(loadRecords)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
   const [couponSearch, setCouponSearch] = useState('')
@@ -325,6 +337,69 @@ function App() {
     const timer = window.setTimeout(() => setNotice(null), 5000)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  // ALL 정합성 검증 배치의 진행 상태는 App에서 구독한다. IntegrityReportTab은 탭을
+  // 벗어나면 언마운트되므로, 거기서 직접 구독하면 다시 들어왔을 때 "지금 배치가 도는
+  // 중인지"를 잊어버려 중복 실행을 막을 수 없다.
+  useEffect(() => {
+    const unsubscribe = subscribeNotifications(({ type, payload }) => {
+      switch (type) {
+        case 'CONSISTENCY_BATCH_STARTED':
+          setConsistencyBatch({
+            jobExecutionId: payload.jobExecutionId,
+            totalSteps: payload.totalSteps,
+            currentCheck: null,
+            completedSteps: [],
+            finished: false,
+          })
+          break
+        case 'CONSISTENCY_STEP_STARTED':
+          setConsistencyBatch((current) => current && { ...current, currentCheck: payload.checkName })
+          break
+        case 'CONSISTENCY_STEP_COMPLETED':
+          setConsistencyBatch((current) => current && {
+            ...current,
+            completedSteps: [...current.completedSteps, payload.checkName],
+          })
+          break
+        case 'CONSISTENCY_BATCH_COMPLETED':
+          setConsistencyBatch((current) => current && {
+            ...current,
+            currentCheck: null,
+            finished: true,
+            finalStatus: payload.status,
+          })
+          break
+        default:
+          break
+      }
+    })
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    if (!consistencyBatch?.finished) return undefined
+    const timer = window.setTimeout(() => setConsistencyBatch(null), CONSISTENCY_BATCH_HIDE_AFTER_COMPLETED_MS)
+    return () => window.clearTimeout(timer)
+  }, [consistencyBatch?.finished])
+
+  const isAllConsistencyBatchRunning = consistencyBatch != null && !consistencyBatch.finished
+
+  async function handleStopConsistencyBatch() {
+    if (!consistencyBatch?.jobExecutionId || stoppingConsistencyBatch) return
+    setStoppingConsistencyBatch(true)
+    try {
+      await stopConsistencyVerification(consistencyBatch.jobExecutionId)
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('NETWORK_ERROR')
+      setNotice({
+        tone: 'danger',
+        message: `정합성 배치 중지에 실패했습니다. ${ERROR_LABELS[apiError.code] ?? apiError.message}`,
+      })
+    } finally {
+      setStoppingConsistencyBatch(false)
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -658,10 +733,19 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'integrity' && <IntegrityReportTab />}
+        {activeTab === 'integrity' && (
+          <IntegrityReportTab allBatchRunning={isAllConsistencyBatchRunning} />
+        )}
       </main>
 
-      <NotificationToastStack />
+      <div className="notification-dock">
+        <ConsistencyBatchStatusBanner
+          batch={consistencyBatch}
+          onStop={handleStopConsistencyBatch}
+          stopping={stoppingConsistencyBatch}
+        />
+        <NotificationToastStack />
+      </div>
     </div>
   )
 }

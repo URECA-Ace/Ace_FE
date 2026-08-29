@@ -4,7 +4,19 @@ import { subscribeNotifications } from '../utils/notificationStream'
 const TOAST_DURATION_MS = 6000
 const MAX_VISIBLE_TOASTS = 20
 
+// 이 알림들은 ConsistencyBatchStatusBanner가 상시 표시로 이미 보여주므로, 여기서
+// 토스트로 중복 노출하지 않는다.
+const SKIPPED_TOAST_TYPES = new Set(['CONSISTENCY_BATCH_STARTED', 'CONSISTENCY_STEP_STARTED'])
+
 const TONE_ICON = { success: '✓', danger: '!', info: 'i' }
+
+// 스케줄러 알림(schedulerName)의 원본 값은 Ace_BE 각 Scheduler 클래스의 SCHEDULER_NAME
+// 상수를 그대로 쓰므로, 영어 원문 대신 한글로 보여주기 위한 매핑.
+const SCHEDULER_LABELS = {
+  ALL_CONSISTENCY: '전체 정합성 검증 스케줄링',
+  AS_OF_RANGE_CONSISTENCY: '시간 구간 검증 스케줄링',
+  ORPHAN_VIOLATION_CLEANUP: '고아 위반 데이터 정리 스케줄링',
+}
 
 const NOTIFICATION_LABELS = {
   ISSUE_SUCCESS: (payload) => `쿠폰 발급에 성공했습니다. (회차 #${payload.eventId})`,
@@ -15,8 +27,8 @@ const NOTIFICATION_LABELS = {
   COUPON_ISSUANCE_ALL_COMPLETED: (payload) => `쿠폰 전체 발급이 완료되었습니다. (회차 #${payload.eventId})`,
   CONSISTENCY_STEP_COMPLETED: (payload) => `정합성 검증 Step 완료: ${payload.checkName} (${payload.status})`,
   CONSISTENCY_BATCH_COMPLETED: (payload) => `ALL 정합성 배치가 완료되었습니다. (Step ${payload.stepCount}개, ${payload.status})`,
-  SCHEDULER_STARTED: (payload) => `스케줄러가 시작되었습니다: ${payload.schedulerName}`,
-  SCHEDULER_COMPLETED: (payload) => `스케줄러가 완료되었습니다: ${payload.schedulerName}`,
+  SCHEDULER_STARTED: (payload) => `스케줄러가 시작되었습니다: ${SCHEDULER_LABELS[payload.schedulerName] ?? payload.schedulerName}`,
+  SCHEDULER_COMPLETED: (payload) => `스케줄러가 완료되었습니다: ${SCHEDULER_LABELS[payload.schedulerName] ?? payload.schedulerName}`,
 }
 
 const NOTIFICATION_TONES = {
@@ -31,8 +43,6 @@ const NOTIFICATION_TONES = {
   SCHEDULER_COMPLETED: 'success',
 }
 
-let nextToastId = 0
-
 function describeNotification({ type, payload }) {
   const describe = NOTIFICATION_LABELS[type]
   const message = describe ? describe(payload ?? {}) : `${type} 알림이 도착했습니다.`
@@ -44,8 +54,11 @@ function NotificationToastStack() {
 
   useEffect(() => {
     const unsubscribe = subscribeNotifications((notification) => {
+      if (SKIPPED_TOAST_TYPES.has(notification.type)) return
       const { tone, message } = describeNotification(notification)
-      const id = nextToastId++
+      // 개발 중 Vite HMR로 이 모듈이 다시 로드되면 모듈 스코프 변수는 초기화되지만
+      // 컴포넌트 state(toasts)는 유지되므로, 카운터 대신 충돌 없는 id를 사용해야 한다.
+      const id = crypto.randomUUID()
       setToasts((current) => [...current, { id, tone, message }])
       window.setTimeout(() => {
         setToasts((current) => current.filter((toast) => toast.id !== id))

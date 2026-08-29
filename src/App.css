@@ -452,15 +452,58 @@ h1 {
   }
 }
 
-.toast-stack {
+.notification-dock {
   position: fixed;
   z-index: 40;
   right: 24px;
   bottom: 24px;
   display: flex;
   flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.toast-stack {
+  display: flex;
+  flex-direction: column-reverse;
   gap: 10px;
   width: min(360px, calc(100vw - 48px));
+}
+
+.consistency-batch-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #bcd7f2;
+  border-radius: 11px;
+  color: #2563a8;
+  background: #f2f8fe;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 16px 38px rgba(30, 18, 34, 0.16);
+  animation: toast-in 220ms ease-out both;
+}
+
+.consistency-batch-banner.finished {
+  color: #087552;
+  border-color: #b8ead9;
+  background: #effbf7;
+}
+
+.consistency-batch-stop-button {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid #f0b8c4;
+  border-radius: 7px;
+  background: #fff5f7;
+  color: #b0304a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.consistency-batch-stop-button:disabled {
+  opacity: 0.6;
 }
 
 .toast-item {
@@ -737,6 +780,11 @@ h1 {
   border-color: var(--magenta);
   color: var(--magenta-dark);
   background: rgba(230, 0, 126, 0.06);
+}
+
+.grafana-filter-chip-all {
+  border-style: dashed;
+  font-weight: 700;
 }
 
 .grafana-metric-frame {
