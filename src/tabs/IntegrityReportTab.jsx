@@ -10,28 +10,22 @@ import {
   verifyConsistency,
 } from '../api/couponApi'
 import GrafanaMetricCard from '../components/GrafanaMetricCard'
+import { CHECK_LABELS } from '../constants/consistencyChecks'
+import { subscribeNotifications } from '../utils/notificationStream'
 import './IntegrityReportTab.css'
 
 const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
-const REPORT_REFRESH_INTERVAL_MS = 10_000
 const VIOLATION_PAGE_SIZE = 20
 const PAGE_GROUP_SIZE = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
-// checkName은 Ace_BE의 ConsistencyCheck 구현체 클래스명을 그대로 사용한다.
-const CHECK_LABELS = {
-  StockConsistencyCheck: '재고 정합성',
-  RedisMysqlLossConsistencyCheck: 'Redis-MySQL 유실',
-  DuplicateConsistencyCheck: '중복 발급',
-  DuplicateSequenceConsistencyCheck: '발급 순번 중복',
-  StateMachineConsistencyCheck: '상태 전이',
-  CouponIssueStructuralConsistencyCheck: '발급 구조 정합성',
-  CouponIssueHistoryStateConsistencyCheck: '발급 이력 상태 정합성',
-  CouponHistoryStructuralConsistencyCheck: '쿠폰 이력 구조 정합성',
-  CouponExpirationLagConsistencyCheck: '쿠폰 만료 지연',
-  IssueHistoryTimeSyncConsistencyCheck: '이력 시간 동기화',
+const TRIGGER_LABELS = {
+  EVENT_TRIGGER: '이벤트 발생 시',
+  SCHEDULED: '스케줄러',
+  ON_DEMAND: '수동 실행',
+  RECOVERY_REVALIDATION: '복구 재검증',
 }
 
 const RESULT_STATUS_META = {
@@ -155,7 +149,7 @@ function FieldSearch({ fields, activeField, onFieldChange, value, onValueChange,
   )
 }
 
-function IntegrityReportTab() {
+function IntegrityReportTab({ allBatchRunning }) {
   const [results, setResults] = useState([])
   const [selectedMethodByResult, setSelectedMethodByResult] = useState({})
   const [recoveryHistory, setRecoveryHistory] = useState([])
@@ -290,10 +284,15 @@ function IntegrityReportTab() {
     }
 
     refresh()
-    const intervalId = window.setInterval(refresh, REPORT_REFRESH_INTERVAL_MS)
+    // 고정 주기 폴링 대신, VerificationResult가 새로 저장될 때마다 백엔드가 보내는
+    // CONSISTENCY_STEP_COMPLETED 알림(배치 Step이든 EVENT/AS_OF_RANGE 동기 검증이든 동일하게
+    // 발행됨)을 받을 때만 다시 조회한다.
+    const unsubscribe = subscribeNotifications(({ type }) => {
+      if (type === 'CONSISTENCY_STEP_COMPLETED') refresh()
+    })
     return () => {
       controller.abort()
-      window.clearInterval(intervalId)
+      unsubscribe()
     }
   }, [recentPage, refreshReportData])
 
@@ -349,6 +348,11 @@ function IntegrityReportTab() {
       : [...current, checkName])
   }
 
+  function toggleAllChecks() {
+    const allNames = selectedCatalog?.checks.map((check) => check.name) ?? []
+    setSelectedChecks((current) => current.length === allNames.length ? [] : allNames)
+  }
+
   function buildScopePayload() {
     if (selectedScope === 'EVENT') return { type: 'EVENT', eventId: Number(eventId) }
     if (selectedScope === 'AS_OF_RANGE') {
@@ -359,6 +363,9 @@ function IntegrityReportTab() {
 
   function validateVerificationRequest() {
     if (selectedChecks.length === 0) return '실행할 검사를 한 개 이상 선택해주세요.'
+    if (selectedScope === 'ALL' && allBatchRunning) {
+      return '이미 ALL 정합성 검증이 진행 중입니다. 완료된 후 다시 시도해주세요.'
+    }
     if (selectedScope === 'EVENT' && (!eventId || Number(eventId) <= 0)) {
       return '검증할 이벤트 ID를 입력해주세요.'
     }
@@ -538,7 +545,19 @@ function IntegrityReportTab() {
 
         <div className="check-selector">
           <div className="check-selector-heading">
-            <strong>실행할 검사</strong>
+            <div className="check-selector-heading-left">
+              <strong>실행할 검사</strong>
+              <button
+                type="button"
+                className="text-button"
+                onClick={toggleAllChecks}
+                disabled={verifying || !selectedCatalog?.checks.length}
+              >
+                {selectedChecks.length > 0 && selectedChecks.length === selectedCatalog?.checks.length
+                  ? '전체 해제'
+                  : '전체 선택'}
+              </button>
+            </div>
             <span>{selectedChecks.length}개 선택</span>
           </div>
           {loadingChecks ? (
@@ -575,9 +594,13 @@ function IntegrityReportTab() {
             type="button"
             className="primary-button consistency-verify-button"
             onClick={runVerification}
-            disabled={loadingChecks || verifying || !selectedCatalog}
+            disabled={loadingChecks || verifying || !selectedCatalog || (selectedScope === 'ALL' && allBatchRunning)}
           >
-            {verifying ? '검증 실행 중…' : `선택한 검사 실행 (${selectedChecks.length})`}
+            {verifying
+              ? '검증 실행 중…'
+              : (selectedScope === 'ALL' && allBatchRunning)
+                ? 'ALL 검증 진행 중…'
+                : `선택한 검사 실행 (${selectedChecks.length})`}
           </button>
           {verificationNotice && (
             <p
@@ -613,6 +636,7 @@ function IntegrityReportTab() {
             <thead>
               <tr>
                 <th>검증 항목</th>
+                <th>실행 방법</th>
                 <th>상태</th>
                 <th>위반 건수</th>
                 <th>대상</th>
@@ -625,6 +649,7 @@ function IntegrityReportTab() {
                 return (
                   <tr key={result.id}>
                     <td><strong>{CHECK_LABELS[result.checkName] ?? result.checkName}</strong></td>
+                    <td>{TRIGGER_LABELS[result.triggerType] ?? result.triggerType}</td>
                     <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
                     <td>{result.violationCount > 0 ? `${result.violationCount}건` : '-'}</td>
                     <td>{scopeLabel(result)}</td>
@@ -633,7 +658,7 @@ function IntegrityReportTab() {
                 )
               }) : (
                 <tr>
-                  <td colSpan="5" className="table-empty">
+                  <td colSpan="6" className="table-empty">
                     {recentSearchText.trim() ? '검색 조건에 맞는 결과가 없습니다.' : '검증 결과가 없습니다.'}
                   </td>
                 </tr>

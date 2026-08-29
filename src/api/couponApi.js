@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(code, message, status, incidentId) {
@@ -185,6 +185,14 @@ export function verifyConsistency(payload, signal) {
       Accept: 'application/json',
     },
     body: JSON.stringify(payload),
+  })
+}
+
+export function stopConsistencyVerification(jobExecutionId, signal) {
+  return request(`/api/v1/consistency/verifications/${jobExecutionId}/stop`, {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
   })
 }
 

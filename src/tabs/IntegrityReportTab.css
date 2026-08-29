@@ -30,6 +30,12 @@
   margin: 0;
 }
 
+.check-selector-heading-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .consistency-launcher-body {
   display: grid;
   gap: 18px;
