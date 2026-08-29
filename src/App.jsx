@@ -14,6 +14,7 @@ import IntegrityReportTab from './tabs/IntegrityReportTab'
 import IssueFailureTab from './tabs/IssueFailureTab'
 import NotificationToastStack from './components/NotificationToastStack'
 import ConsistencyBatchStatusBanner from './components/ConsistencyBatchStatusBanner'
+import ConsistencyInjectionPanel from './components/ConsistencyInjectionPanel'
 import { loadRecords } from './utils/issueRecords'
 import { subscribeNotifications } from './utils/notificationStream'
 import './App.css'
@@ -739,12 +740,25 @@ function App() {
                 errorLabels={ERROR_LABELS}
               />
             </section>
+
+            <section className="test-section" aria-labelledby="consistency-injection-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>04</span>
+                  <div>
+                    <p>CONSISTENCY VIOLATION INJECTION</p>
+                    <h2 id="consistency-injection-section-title">정합성 위반 데이터 주입</h2>
+                  </div>
+                </div>
+                <small>DB에 위반 데이터를 심어 정합성 검증 탐지 · 복구 흐름을 확인</small>
+              </div>
+              <ConsistencyInjectionPanel />
+            </section>
           </div>
         )}
 
         {activeTab === 'failures' && <IssueFailureTab />}
 
-        {activeTab === 'integrity' && <IntegrityReportTab />}
         {activeTab === 'integrity' && (
           <IntegrityReportTab allBatchRunning={isAllConsistencyBatchRunning} />
         )}
