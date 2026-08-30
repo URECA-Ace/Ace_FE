@@ -19,6 +19,7 @@ const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
 const VIOLATION_PAGE_SIZE = 20
 const PAGE_GROUP_SIZE = 10
+const RECENT_EVENT_LIMIT = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
@@ -187,7 +188,6 @@ function IntegrityReportTab({ allBatchRunning }) {
   const [recoverySearchText, setRecoverySearchText] = useState('')
   const [recentEvents, setRecentEvents] = useState([])
   const [eventPickerOpen, setEventPickerOpen] = useState(false)
-  const [eventSearchText, setEventSearchText] = useState('')
 
   const refreshReportData = useCallback(async (signal, requestedPage = 0) => {
     setReportLoading(true)
@@ -266,10 +266,10 @@ function IntegrityReportTab({ allBatchRunning }) {
           Promise.all(SCOPE_TYPES.map(
             (scopeType) => getConsistencyChecks(scopeType, controller.signal),
           )),
-          getRecentCouponEvents(undefined, controller.signal),
+          getRecentCouponEvents(undefined, controller.signal, RECENT_EVENT_LIMIT),
         ])
         setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
-        setRecentEvents(eventsPage.content ?? eventsPage ?? [])
+        setRecentEvents((eventsPage.content ?? eventsPage ?? []).slice(0, RECENT_EVENT_LIMIT))
       } catch (error) {
         if (error.name === 'AbortError') return
         const message = error instanceof ApiError
@@ -351,16 +351,6 @@ function IntegrityReportTab({ allBatchRunning }) {
     setDetailResult(null)
     setDetailViolations(null)
     setDetailError(null)
-  }
-
-  function filterEvents(list, needle) {
-    if (!needle.trim()) return list
-    const lowerNeedle = needle.toLowerCase()
-    return list.filter((event) => {
-      const eventName = event.couponName ?? ''
-      const eventId = String(event.eventId ?? '')
-      return eventName.toLowerCase().includes(lowerNeedle) || eventId.includes(lowerNeedle)
-    })
   }
 
   function selectScope(scopeType) {
@@ -544,19 +534,9 @@ function IntegrityReportTab({ allBatchRunning }) {
             </button>
             {eventPickerOpen && (
               <div className="event-picker-panel">
-                <label className="event-picker-search">
-                  <span aria-hidden="true">⌕</span>
-                  <input
-                    type="search"
-                    value={eventSearchText}
-                    onChange={(event) => setEventSearchText(event.target.value)}
-                    placeholder="이벤트 이름 또는 ID로 검색"
-                    autoFocus
-                  />
-                </label>
                 <div className="event-picker-list">
-                  {filterEvents(recentEvents, eventSearchText).length > 0 ? (
-                    filterEvents(recentEvents, eventSearchText).map((event) => (
+                  {recentEvents.length > 0 ? (
+                    recentEvents.map((event) => (
                       <button
                         key={event.eventId}
                         type="button"
@@ -564,7 +544,6 @@ function IntegrityReportTab({ allBatchRunning }) {
                         onClick={() => {
                           setEventId(String(event.eventId))
                           setEventPickerOpen(false)
-                          setEventSearchText('')
                         }}
                       >
                         <strong>{event.couponName}</strong>
@@ -572,9 +551,7 @@ function IntegrityReportTab({ allBatchRunning }) {
                       </button>
                     ))
                   ) : (
-                    <div className="event-picker-empty">
-                      {eventSearchText.trim() ? '검색 결과가 없습니다.' : '최근 이벤트가 없습니다.'}
-                    </div>
+                    <div className="event-picker-empty">최근 이벤트가 없습니다.</div>
                   )}
                 </div>
               </div>

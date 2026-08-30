@@ -723,29 +723,8 @@
   z-index: 100;
 }
 
-.event-picker-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid #eae7f0;
-}
-
-.event-picker-search span {
-  color: #8b7e96;
-  flex-shrink: 0;
-}
-
-.event-picker-search input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  padding: 0;
-}
-
 .event-picker-list {
-  max-height: 300px;
+  max-height: 250px;
   overflow-y: auto;
 }
 
@@ -755,6 +734,8 @@
   align-items: flex-start;
   gap: 4px;
   width: 100%;
+  min-height: 50px;
+  box-sizing: border-box;
   padding: 10px 14px;
   border: none;
   background: none;
