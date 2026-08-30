@@ -118,9 +118,12 @@ export function getCoupons(keyword = '', signal) {
   })
 }
 
-export function getRecentCouponEvents(status, signal) {
-  const path = status
-    ? `/api/v1/events/recent?${new URLSearchParams({ status })}`
+export function getRecentCouponEvents(status, signal, size) {
+  const query = new URLSearchParams()
+  if (status) query.set('status', status)
+  if (size) query.set('size', String(size))
+  const path = query.size > 0
+    ? `/api/v1/events/recent?${query}`
     : '/api/v1/events/recent'
   return request(path, {
     method: 'GET',

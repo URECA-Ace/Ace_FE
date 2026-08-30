@@ -6,6 +6,7 @@ import {
   getConsistencyRecoveryMethods,
   getConsistencyResults,
   getConsistencyViolations,
+  getRecentCouponEvents,
   recoverConsistency,
   verifyConsistency,
 } from '../api/couponApi'
@@ -19,6 +20,7 @@ const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
 const VIOLATION_PAGE_SIZE = 20
 const PAGE_GROUP_SIZE = 10
+const RECENT_EVENT_LIMIT = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
@@ -185,6 +187,8 @@ function IntegrityReportTab({ allBatchRunning }) {
   const [failSearchText, setFailSearchText] = useState('')
   const [recoverySearchField, setRecoverySearchField] = useState('checkName')
   const [recoverySearchText, setRecoverySearchText] = useState('')
+  const [recentEvents, setRecentEvents] = useState([])
+  const [eventPickerOpen, setEventPickerOpen] = useState(false)
 
   const refreshReportData = useCallback(async (signal, requestedPage = 0) => {
     setReportLoading(true)
@@ -243,17 +247,30 @@ function IntegrityReportTab({ allBatchRunning }) {
   }, [])
 
   useEffect(() => {
+    if (!eventPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setEventPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [eventPickerOpen])
+
+  useEffect(() => {
     const controller = new AbortController()
 
     async function loadTabData() {
       setLoadingChecks(true)
       try {
-        const [catalogs] = await Promise.all([
+        const [catalogs, eventsPage] = await Promise.all([
           Promise.all(SCOPE_TYPES.map(
             (scopeType) => getConsistencyChecks(scopeType, controller.signal),
           )),
+          getRecentCouponEvents(undefined, controller.signal, RECENT_EVENT_LIMIT),
         ])
         setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
+        setRecentEvents((eventsPage.content ?? eventsPage ?? []).slice(0, RECENT_EVENT_LIMIT))
       } catch (error) {
         if (error.name === 'AbortError') return
         const message = error instanceof ApiError
@@ -504,17 +521,42 @@ function IntegrityReportTab({ allBatchRunning }) {
         </div>
 
         {selectedScope === 'EVENT' && (
-          <label className="verification-scope-field">
-            <span>이벤트 ID</span>
-            <input
-              type="number"
-              min="1"
-              value={eventId}
-              onChange={(event) => setEventId(event.target.value)}
-              placeholder="예: 123"
+          <div className="verification-scope-field">
+            <span>이벤트 선택</span>
+            <button
+              type="button"
+              className="event-picker-trigger"
+              onClick={() => setEventPickerOpen(true)}
               disabled={verifying}
-            />
-          </label>
+            >
+              {recentEvents.find((e) => String(e.eventId) === String(eventId))?.couponName ?? '이벤트 선택'}
+              <span aria-hidden="true">▼</span>
+            </button>
+            {eventPickerOpen && (
+              <div className="event-picker-panel">
+                <div className="event-picker-list">
+                  {recentEvents.length > 0 ? (
+                    recentEvents.map((event) => (
+                      <button
+                        key={event.eventId}
+                        type="button"
+                        className={`event-picker-item ${String(event.eventId) === String(eventId) ? 'selected' : ''}`}
+                        onClick={() => {
+                          setEventId(String(event.eventId))
+                          setEventPickerOpen(false)
+                        }}
+                      >
+                        <strong>{event.couponName}</strong>
+                        <small>#{event.eventId}</small>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="event-picker-empty">최근 이벤트가 없습니다.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {selectedScope === 'AS_OF_RANGE' && (
