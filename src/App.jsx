@@ -744,7 +744,6 @@ function App() {
 
         {activeTab === 'failures' && <IssueFailureTab />}
 
-        {activeTab === 'integrity' && <IntegrityReportTab />}
         {activeTab === 'integrity' && (
           <IntegrityReportTab allBatchRunning={isAllConsistencyBatchRunning} />
         )}
