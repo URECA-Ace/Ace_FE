@@ -248,6 +248,48 @@ export function getConsistencyRecoveries(page = 0, size = 100, signal) {
   })
 }
 
+export function getConsistencySchedules(signal) {
+  return request('/api/v1/consistency/schedules', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function updateConsistencySchedule(schedulerName, intervalMs, signal) {
+  return request(`/api/v1/consistency/schedules/${schedulerName}`, {
+    method: 'PATCH',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ intervalMs }),
+  })
+}
+
+export function getConsistencyInjectors(signal) {
+  return request('/api/v1/consistency/injectors', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function injectConsistencyViolation(checkName, eventId, signal) {
+  return request('/api/v1/consistency/injections', {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ checkName, eventId }),
+  })
+}
+
 export function getCouponIssueId(eventId, userId, signal) {
   return request(`/api/v1/coupons/issues/lookup?eventId=${eventId}&userId=${userId}`, {
     method: 'GET',

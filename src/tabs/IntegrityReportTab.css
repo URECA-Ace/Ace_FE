@@ -89,10 +89,9 @@
 }
 
 .scope-toggle {
-  min-height: 62px;
+  min-height: 44px;
   padding: 12px 14px;
   display: grid;
-  gap: 4px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--ink);
@@ -112,12 +111,6 @@
 
 .scope-toggle strong {
   font-size: 12px;
-}
-
-.scope-toggle span {
-  color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 0.08em;
 }
 
 .verification-scope-field {
@@ -213,23 +206,13 @@
 .check-toggle > span:last-child {
   min-width: 0;
   display: grid;
-  gap: 3px;
-}
-
-.check-toggle strong,
-.check-toggle small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .check-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
-}
-
-.check-toggle small {
-  color: var(--muted);
-  font-size: 8px;
 }
 
 .consistency-launcher-footer {
@@ -606,10 +589,83 @@
   white-space: nowrap;
 }
 
+.schedule-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.schedule-card {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.schedule-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.schedule-card-heading strong {
+  font-size: 12px;
+}
+
+.schedule-card-details {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-card-details div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.schedule-card-details dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.schedule-card-details dd {
+  margin: 0;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.schedule-card-form {
+  display: flex;
+  gap: 8px;
+}
+
+.schedule-card-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #ddd7e1;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 10px;
+}
+
+.schedule-card-form input:disabled {
+  color: var(--muted);
+  background: #f5f3f6;
+}
+
 @media (max-width: 760px) {
   .scope-toggle-group,
   .check-toggle-grid,
-  .range-field-group {
+  .range-field-group,
+  .schedule-card-grid {
     grid-template-columns: 1fr;
   }
 
