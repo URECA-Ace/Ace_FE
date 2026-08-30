@@ -462,7 +462,6 @@ function IntegrityReportTab({ allBatchRunning }) {
           <h2 id="reconciliation-title">데이터 정합성 리포트</h2>
           <p>최근 검증 결과를 확인하고, 실패한 항목은 복구 방법을 선택해 복구를 진행합니다.</p>
         </div>
-        <span className="api-chip">POST · /api/v1/consistency/verifications</span>
       </div>
 
       <section className="panel consistency-launcher" aria-labelledby="consistency-launcher-title">
@@ -716,7 +715,6 @@ function IntegrityReportTab({ allBatchRunning }) {
             <h2 id="verification-error-title">정합성 검증 에러</h2>
           </div>
           <div className="panel-heading-actions">
-            <span className="api-chip subtle">status = ERROR</span>
             <FieldSearch
               fields={RESULT_SEARCH_FIELDS_FIXED_STATUS}
               activeField={errorSearchField}
@@ -754,7 +752,6 @@ function IntegrityReportTab({ allBatchRunning }) {
             <h2 id="verification-fail-title">정합성 검증 실패</h2>
           </div>
           <div className="panel-heading-actions">
-            <span className="api-chip subtle">status = FAIL</span>
             <FieldSearch
               fields={RESULT_SEARCH_FIELDS_FIXED_STATUS}
               activeField={failSearchField}
