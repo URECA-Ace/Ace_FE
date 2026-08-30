@@ -89,10 +89,9 @@
 }
 
 .scope-toggle {
-  min-height: 62px;
+  min-height: 44px;
   padding: 12px 14px;
   display: grid;
-  gap: 4px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--ink);
@@ -112,12 +111,6 @@
 
 .scope-toggle strong {
   font-size: 12px;
-}
-
-.scope-toggle span {
-  color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 0.08em;
 }
 
 .verification-scope-field {
@@ -213,23 +206,13 @@
 .check-toggle > span:last-child {
   min-width: 0;
   display: grid;
-  gap: 3px;
-}
-
-.check-toggle strong,
-.check-toggle small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .check-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
-}
-
-.check-toggle small {
-  color: var(--muted);
-  font-size: 8px;
 }
 
 .consistency-launcher-footer {

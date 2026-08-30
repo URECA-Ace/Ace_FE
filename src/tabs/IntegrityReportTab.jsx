@@ -463,7 +463,6 @@ function IntegrityReportTab({ allBatchRunning }) {
           <h2 id="reconciliation-title">데이터 정합성 리포트</h2>
           <p>최근 검증 결과를 확인하고, 실패한 항목은 복구 방법을 선택해 복구를 진행합니다.</p>
         </div>
-        <span className="api-chip">POST · /api/v1/consistency/verifications</span>
       </div>
 
       <section className="panel consistency-launcher" aria-labelledby="consistency-launcher-title">
@@ -500,7 +499,6 @@ function IntegrityReportTab({ allBatchRunning }) {
               disabled={loadingChecks || verifying}
             >
               <strong>{scopeCatalogs[scopeType]?.scope.label ?? scopeType}</strong>
-              <span>{scopeType}</span>
             </button>
           ))}
         </div>
@@ -579,7 +577,6 @@ function IntegrityReportTab({ allBatchRunning }) {
                     <span className="check-toggle-indicator" aria-hidden="true">{selected ? '✓' : '+'}</span>
                     <span>
                       <strong>{check.label}</strong>
-                      <small>{check.name}</small>
                     </span>
                   </button>
                 )
