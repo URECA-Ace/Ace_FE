@@ -6,6 +6,7 @@ import {
   getConsistencyRecoveryMethods,
   getConsistencyResults,
   getConsistencyViolations,
+  getRecentCouponEvents,
   recoverConsistency,
   verifyConsistency,
 } from '../api/couponApi'
@@ -184,6 +185,9 @@ function IntegrityReportTab({ allBatchRunning }) {
   const [failSearchText, setFailSearchText] = useState('')
   const [recoverySearchField, setRecoverySearchField] = useState('checkName')
   const [recoverySearchText, setRecoverySearchText] = useState('')
+  const [recentEvents, setRecentEvents] = useState([])
+  const [eventPickerOpen, setEventPickerOpen] = useState(false)
+  const [eventSearchText, setEventSearchText] = useState('')
 
   const refreshReportData = useCallback(async (signal, requestedPage = 0) => {
     setReportLoading(true)
@@ -242,17 +246,30 @@ function IntegrityReportTab({ allBatchRunning }) {
   }, [])
 
   useEffect(() => {
+    if (!eventPickerOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setEventPickerOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [eventPickerOpen])
+
+  useEffect(() => {
     const controller = new AbortController()
 
     async function loadTabData() {
       setLoadingChecks(true)
       try {
-        const [catalogs] = await Promise.all([
+        const [catalogs, eventsPage] = await Promise.all([
           Promise.all(SCOPE_TYPES.map(
             (scopeType) => getConsistencyChecks(scopeType, controller.signal),
           )),
+          getRecentCouponEvents(undefined, controller.signal),
         ])
         setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
+        setRecentEvents(eventsPage.content ?? eventsPage ?? [])
       } catch (error) {
         if (error.name === 'AbortError') return
         const message = error instanceof ApiError
@@ -334,6 +351,16 @@ function IntegrityReportTab({ allBatchRunning }) {
     setDetailResult(null)
     setDetailViolations(null)
     setDetailError(null)
+  }
+
+  function filterEvents(list, needle) {
+    if (!needle.trim()) return list
+    const lowerNeedle = needle.toLowerCase()
+    return list.filter((event) => {
+      const eventName = event.couponName ?? ''
+      const eventId = String(event.eventId ?? '')
+      return eventName.toLowerCase().includes(lowerNeedle) || eventId.includes(lowerNeedle)
+    })
   }
 
   function selectScope(scopeType) {
@@ -504,17 +531,55 @@ function IntegrityReportTab({ allBatchRunning }) {
         </div>
 
         {selectedScope === 'EVENT' && (
-          <label className="verification-scope-field">
-            <span>이벤트 ID</span>
-            <input
-              type="number"
-              min="1"
-              value={eventId}
-              onChange={(event) => setEventId(event.target.value)}
-              placeholder="예: 123"
+          <div className="verification-scope-field">
+            <span>이벤트 선택</span>
+            <button
+              type="button"
+              className="event-picker-trigger"
+              onClick={() => setEventPickerOpen(true)}
               disabled={verifying}
-            />
-          </label>
+            >
+              {recentEvents.find((e) => String(e.eventId) === String(eventId))?.couponName ?? '이벤트 선택'}
+              <span aria-hidden="true">▼</span>
+            </button>
+            {eventPickerOpen && (
+              <div className="event-picker-panel">
+                <label className="event-picker-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    value={eventSearchText}
+                    onChange={(event) => setEventSearchText(event.target.value)}
+                    placeholder="이벤트 이름 또는 ID로 검색"
+                    autoFocus
+                  />
+                </label>
+                <div className="event-picker-list">
+                  {filterEvents(recentEvents, eventSearchText).length > 0 ? (
+                    filterEvents(recentEvents, eventSearchText).map((event) => (
+                      <button
+                        key={event.eventId}
+                        type="button"
+                        className={`event-picker-item ${String(event.eventId) === String(eventId) ? 'selected' : ''}`}
+                        onClick={() => {
+                          setEventId(String(event.eventId))
+                          setEventPickerOpen(false)
+                          setEventSearchText('')
+                        }}
+                      >
+                        <strong>{event.couponName}</strong>
+                        <small>#{event.eventId}</small>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="event-picker-empty">
+                      {eventSearchText.trim() ? '검색 결과가 없습니다.' : '최근 이벤트가 없습니다.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {selectedScope === 'AS_OF_RANGE' && (
