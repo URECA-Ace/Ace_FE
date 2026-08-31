@@ -83,7 +83,6 @@ function ConsistencyInjectionPanel() {
           <span className="section-number">01</span>
           <h2 id="injection-panel-title">정합성 위반 데이터 주입</h2>
         </div>
-        <span className="api-chip subtle">POST · /api/v1/consistency/injections</span>
       </div>
       <p className="panel-description">
         선택한 검사 항목의 위반 데이터를 실제 DB에 직접 심어, 정합성 검증이 이를 탐지하고 복구하는 과정을 눈으로 확인합니다.
