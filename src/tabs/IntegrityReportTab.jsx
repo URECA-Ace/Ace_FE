@@ -7,6 +7,7 @@ import {
   getConsistencyResults,
   getConsistencyViolations,
   recoverConsistency,
+  restartInterruptedConsistencyResult,
   verifyConsistency,
 } from '../api/couponApi'
 import ConsistencySchedulePanel from '../components/ConsistencySchedulePanel'
@@ -146,6 +147,8 @@ function IntegrityReportTab({ allBatchRunning }) {
   const [recoveryHistory, setRecoveryHistory] = useState([])
   const [recoveryMethodsByResult, setRecoveryMethodsByResult] = useState({})
   const [recoveringResultId, setRecoveringResultId] = useState(null)
+  const [restartingResultId, setRestartingResultId] = useState(null)
+  const [restartedResults, setRestartedResults] = useState({})
   const [reportLoading, setReportLoading] = useState(true)
   const [detailResult, setDetailResult] = useState(null)
   const [detailViolations, setDetailViolations] = useState(null)
@@ -276,8 +279,19 @@ function IntegrityReportTab({ allBatchRunning }) {
     // 고정 주기 폴링 대신, VerificationResult가 새로 저장될 때마다 백엔드가 보내는
     // CONSISTENCY_STEP_COMPLETED 알림(배치 Step이든 EVENT/AS_OF_RANGE 동기 검증이든 동일하게
     // 발행됨)을 받을 때만 다시 조회한다.
-    const unsubscribe = subscribeNotifications(({ type }) => {
+    const unsubscribe = subscribeNotifications(({ type, payload }) => {
       if (type === 'CONSISTENCY_STEP_COMPLETED') refresh()
+      if (type === 'CONSISTENCY_BATCH_COMPLETED' && payload?.jobExecutionId) {
+        setRestartedResults((current) => {
+          const next = { ...current }
+          Object.entries(next).forEach(([resultId, state]) => {
+            if (state.jobExecutionId === payload.jobExecutionId) {
+              next[resultId] = { ...state, status: payload.status === 'COMPLETED' ? 'COMPLETED' : payload.status }
+            }
+          })
+          return next
+        })
+      }
     })
     return () => {
       controller.abort()
@@ -420,6 +434,24 @@ function IntegrityReportTab({ allBatchRunning }) {
       setVerificationNotice({ tone: 'danger', message })
     } finally {
       setRecoveringResultId(null)
+    }
+  }
+
+  async function restartInterruptedResult(resultId) {
+    setRestartingResultId(resultId)
+    try {
+      const execution = await restartInterruptedConsistencyResult(resultId)
+      setRestartedResults((current) => ({
+        ...current,
+        [resultId]: { jobExecutionId: execution.jobExecutionId, status: 'RUNNING' },
+      }))
+      setVerificationNotice({ tone: 'success', message: '중단된 ALL 검증을 이어서 시작했습니다.' })
+      await refreshReportData(undefined, recentPage)
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : '중단된 검증을 이어서 시작하지 못했습니다.'
+      setVerificationNotice({ tone: 'danger', message })
+    } finally {
+      setRestartingResultId(null)
     }
   }
 
@@ -656,7 +688,9 @@ function IntegrityReportTab({ allBatchRunning }) {
                   <tr key={result.id}>
                     <td><strong>{checkLabels[result.checkName] ?? result.checkName}</strong></td>
                     <td>{TRIGGER_LABELS[result.triggerType] ?? result.triggerType}</td>
-                    <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
+                    <td>
+                      <span className={`status-badge compact ${meta.tone}`}>{meta.label}</span>
+                    </td>
                     <td>{result.violationCount > 0 ? `${result.violationCount}건` : '-'}</td>
                     <td>{scopeLabel(result)}</td>
                     <td>{formatDate(result.executedAt)}</td>
@@ -735,13 +769,35 @@ function IntegrityReportTab({ allBatchRunning }) {
         <div className="reconciliation-scroll-area">
           {errorResults.length > 0 ? (
             <ul className="verification-error-list">
-              {errorResults.map((result) => (
+              {errorResults.map((result) => {
+                const restartable = result.scopeType === 'ALL'
+                  && result.errorMessage?.toLowerCase().includes('interrupted')
+                const restarting = restartingResultId === result.id
+                const restarted = restartedResults[result.id]
+                return (
                 <li key={result.id} className="error-box">
-                  <strong>{checkLabels[result.checkName] ?? result.checkName}</strong>
+                  <div className="error-box-heading">
+                    <strong>{checkLabels[result.checkName] ?? result.checkName}</strong>
+                    {restartable && (
+                      <button
+                        type="button"
+                        className="ghost-button recovery-button"
+                        onClick={() => restartInterruptedResult(result.id)}
+                        disabled={restarting || restarted?.status === 'COMPLETED'}
+                      >
+                        {restarting || restarted?.status === 'RUNNING'
+                          ? '이어서 검사 중…'
+                          : restarted?.status === 'COMPLETED'
+                            ? '이어서 검사 완료'
+                            : '이어서 검사'}
+                      </button>
+                    )}
+                  </div>
                   <span>{result.errorMessage}</span>
                   <small>{formatDate(result.executedAt)} · {scopeLabel(result)}</small>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           ) : (
             <div className="empty-state small">
@@ -872,7 +928,10 @@ function IntegrityReportTab({ allBatchRunning }) {
                   <tr key={entry.id}>
                     <td><strong>{checkLabels[entry.checkName] ?? entry.checkName}</strong></td>
                     <td>{entry.methodLabel}</td>
-                    <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
+                    <td>
+                      <span className={`status-badge compact ${meta.tone}`}>{meta.label}</span>
+                      {entry.message && <small className="recovery-history-message">{entry.message}</small>}
+                    </td>
                     <td>{formatDate(entry.requestedAt)}</td>
                     <td>{formatDate(entry.finishedAt)}</td>
                   </tr>
