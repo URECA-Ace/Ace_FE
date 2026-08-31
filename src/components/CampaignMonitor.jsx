@@ -369,6 +369,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
             >
               {issuanceLogs.map((log) => {
                 const logStatus = issueStatusMeta(log.status)
+                const persistedAt = log.persistedAt ?? log.confirmedAt
                 return (
                   <li key={log.issueSequence}>
                     <span className={`issuance-log-status-dot ${logStatus.tone}`} title={logStatus.label} aria-label={logStatus.label} />
@@ -381,7 +382,7 @@ function CampaignMonitor({ selectedEventId, recentCampaigns = [], onStatsChange 
                         {logStatus.label}
                       </em>
                     </span>
-                    <time className="issuance-log-time" dateTime={log.confirmedAt}>{formatObservedAt(log.confirmedAt)}</time>
+                    <time className="issuance-log-time" dateTime={persistedAt}>{formatObservedAt(persistedAt)}</time>
                   </li>
                 )
               })}
