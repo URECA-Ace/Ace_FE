@@ -199,6 +199,14 @@ export function stopConsistencyVerification(jobExecutionId, signal) {
   })
 }
 
+export function restartInterruptedConsistencyResult(resultId, signal) {
+  return request(`/api/v1/consistency/verifications/results/${resultId}/restart`, {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function getConsistencyVerificationExecution(jobExecutionId, signal) {
   return request(`/api/v1/consistency/verifications/${jobExecutionId}`, {
     method: 'GET',

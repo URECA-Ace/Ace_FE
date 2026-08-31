@@ -366,7 +366,7 @@ function App() {
             currentCheck: null,
             currentCheckLabel: null,
             progress: null,
-            completedSteps: [],
+            completedSteps: payload.completedChecks ?? [],
             finished: false,
           })
           break

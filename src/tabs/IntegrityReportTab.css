@@ -432,6 +432,20 @@
   margin-bottom: 0;
 }
 
+.verification-error-list .error-box-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recovery-history-message {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .fail-item {
   padding: 14px 16px;
   border: 1px solid var(--line);
