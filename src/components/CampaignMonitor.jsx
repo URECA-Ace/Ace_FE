@@ -47,15 +47,18 @@ const ERROR_MESSAGES = {
 
 function formatObservedAt(value) {
   if (!value) return '-'
+
   const date = new Date(value)
+
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    fractionalSecondDigits: 1,
-    hour12: false,
-  }).format(date)
+
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+
+  return `${mm}/${dd} ${hh}:${min}:${ss}`
 }
 
 function campaignLabel(campaign) {
