@@ -15,6 +15,7 @@ import IssueFailureTab from './tabs/IssueFailureTab'
 import NotificationToastStack from './components/NotificationToastStack'
 import ConsistencyBatchStatusBanner from './components/ConsistencyBatchStatusBanner'
 import ConsistencyInjectionPanel from './components/ConsistencyInjectionPanel'
+import IssueRelayControlPanel from './components/IssueRelayControlPanel'
 import { loadRecords } from './utils/issueRecords'
 import { subscribeNotifications } from './utils/notificationStream'
 import './App.css'
@@ -753,6 +754,20 @@ function App() {
                 <small>DB에 위반 데이터를 심어 정합성 검증 탐지 · 복구 흐름을 확인</small>
               </div>
               <ConsistencyInjectionPanel />
+            </section>
+
+            <section className="test-section" aria-labelledby="relay-control-section-title">
+              <div className="test-section-heading">
+                <div>
+                  <span>05</span>
+                  <div>
+                    <p>RELAY FAULT INJECTION</p>
+                    <h2 id="relay-control-section-title">발급 릴레이 장애 시연</h2>
+                  </div>
+                </div>
+                <small>릴레이 강제 정지/재시작 · RESTART_RELAY_CONSUMER 복구 확인</small>
+              </div>
+              <IssueRelayControlPanel />
             </section>
           </div>
         )}

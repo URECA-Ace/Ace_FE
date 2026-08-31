@@ -293,6 +293,31 @@ export function injectConsistencyViolation(checkName, eventId, signal) {
   })
 }
 
+export function getIssueRelayStatus(signal) {
+  return request('/api/v1/coupon/relay/status', {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function stopIssueRelay(signal) {
+  return request('/api/v1/coupon/relay/stop', {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export function startIssueRelay(signal) {
+  return request('/api/v1/coupon/relay/start', {
+    method: 'POST',
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function getCouponIssueId(eventId, userId, signal) {
   return request(`/api/v1/coupons/issues/lookup?eventId=${eventId}&userId=${userId}`, {
     method: 'GET',
