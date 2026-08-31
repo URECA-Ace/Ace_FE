@@ -6,7 +6,6 @@ import {
   getConsistencyRecoveryMethods,
   getConsistencyResults,
   getConsistencyViolations,
-  getRecentCouponEvents,
   recoverConsistency,
   verifyConsistency,
 } from '../api/couponApi'
@@ -20,7 +19,6 @@ const RECENT_RESULT_PAGE_SIZE = 8
 const RECOVERY_HISTORY_LIMIT = 10
 const VIOLATION_PAGE_SIZE = 20
 const PAGE_GROUP_SIZE = 10
-const RECENT_EVENT_LIMIT = 10
 
 const SCOPE_TYPES = ['EVENT', 'AS_OF_RANGE', 'ALL']
 
@@ -187,8 +185,6 @@ function IntegrityReportTab({ allBatchRunning }) {
   const [failSearchText, setFailSearchText] = useState('')
   const [recoverySearchField, setRecoverySearchField] = useState('checkName')
   const [recoverySearchText, setRecoverySearchText] = useState('')
-  const [recentEvents, setRecentEvents] = useState([])
-  const [eventPickerOpen, setEventPickerOpen] = useState(false)
 
   const refreshReportData = useCallback(async (signal, requestedPage = 0) => {
     setReportLoading(true)
@@ -247,30 +243,15 @@ function IntegrityReportTab({ allBatchRunning }) {
   }, [])
 
   useEffect(() => {
-    if (!eventPickerOpen) return undefined
-
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') setEventPickerOpen(false)
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [eventPickerOpen])
-
-  useEffect(() => {
     const controller = new AbortController()
 
     async function loadTabData() {
       setLoadingChecks(true)
       try {
-        const [catalogs, eventsPage] = await Promise.all([
-          Promise.all(SCOPE_TYPES.map(
-            (scopeType) => getConsistencyChecks(scopeType, controller.signal),
-          )),
-          getRecentCouponEvents(undefined, controller.signal, RECENT_EVENT_LIMIT),
-        ])
+        const catalogs = await Promise.all(SCOPE_TYPES.map(
+          (scopeType) => getConsistencyChecks(scopeType, controller.signal),
+        ))
         setScopeCatalogs(Object.fromEntries(catalogs.map((catalog) => [catalog.scope.name, catalog])))
-        setRecentEvents((eventsPage.content ?? eventsPage ?? []).slice(0, RECENT_EVENT_LIMIT))
       } catch (error) {
         if (error.name === 'AbortError') return
         const message = error instanceof ApiError
@@ -384,7 +365,10 @@ function IntegrityReportTab({ allBatchRunning }) {
     if (selectedScope === 'ALL' && allBatchRunning) {
       return '이미 ALL 정합성 검증이 진행 중입니다. 완료된 후 다시 시도해주세요.'
     }
-    if (selectedScope === 'EVENT' && (!eventId || Number(eventId) <= 0)) {
+    if (selectedScope === 'EVENT' && !Number.isSafeInteger(Number(eventId))) {
+      return '이벤트 ID는 정수로 입력해주세요.'
+    }
+    if (selectedScope === 'EVENT' && Number(eventId) <= 0) {
       return '검증할 이벤트 ID를 입력해주세요.'
     }
     if (selectedScope === 'AS_OF_RANGE' && (!rangeFrom || !rangeTo)) {
@@ -521,42 +505,19 @@ function IntegrityReportTab({ allBatchRunning }) {
         </div>
 
         {selectedScope === 'EVENT' && (
-          <div className="verification-scope-field">
-            <span>이벤트 선택</span>
-            <button
-              type="button"
-              className="event-picker-trigger"
-              onClick={() => setEventPickerOpen(true)}
+          <label className="verification-scope-field">
+            <span>이벤트 ID</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={eventId}
+              onChange={(event) => setEventId(event.target.value)}
+              placeholder="검증할 이벤트 ID 입력"
               disabled={verifying}
-            >
-              {recentEvents.find((e) => String(e.eventId) === String(eventId))?.couponName ?? '이벤트 선택'}
-              <span aria-hidden="true">▼</span>
-            </button>
-            {eventPickerOpen && (
-              <div className="event-picker-panel">
-                <div className="event-picker-list">
-                  {recentEvents.length > 0 ? (
-                    recentEvents.map((event) => (
-                      <button
-                        key={event.eventId}
-                        type="button"
-                        className={`event-picker-item ${String(event.eventId) === String(eventId) ? 'selected' : ''}`}
-                        onClick={() => {
-                          setEventId(String(event.eventId))
-                          setEventPickerOpen(false)
-                        }}
-                      >
-                        <strong>{event.couponName}</strong>
-                        <small>#{event.eventId}</small>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="event-picker-empty">최근 이벤트가 없습니다.</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+            />
+          </label>
         )}
 
         {selectedScope === 'AS_OF_RANGE' && (
