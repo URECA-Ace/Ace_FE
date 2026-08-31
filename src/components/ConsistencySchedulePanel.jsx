@@ -105,7 +105,6 @@ function ConsistencySchedulePanel() {
           <span className="section-number">06</span>
           <h2 id="schedule-panel-title">정합성 스케줄러 주기 관리</h2>
         </div>
-        <span className="api-chip subtle">PATCH · /api/v1/consistency/schedules/&#123;schedulerName&#125;</span>
       </div>
 
       {notice && (
