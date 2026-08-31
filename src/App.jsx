@@ -642,7 +642,7 @@ function App() {
           />
         )}
 
-        {activeTab === 'operations' && (
+        <div hidden={activeTab !== 'operations'}>
           <OperationsTab
             view="monitor"
             eventId={eventId}
@@ -656,7 +656,7 @@ function App() {
             formatDate={formatDate}
             errorLabels={ERROR_LABELS}
           />
-        )}
+        </div>
 
         {activeTab === 'loadtest' && (
           <div className="test-tab-stack">

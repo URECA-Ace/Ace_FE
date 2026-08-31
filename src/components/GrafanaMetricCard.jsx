@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react'
 const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const DASHBOARD_PATH = '/d-solo/ace-coupon-metrics/ace-coupon-metrics'
 
-// 대시보드 JSON(docker/grafana/dashboards/ace-coupon-metrics.json)의 interval 변수 옵션과 동일하게 맞춘다.
 const INTERVAL_OPTIONS = [
   { value: '5s', label: '5초' },
   { value: '10s', label: '10초' },
@@ -19,8 +18,6 @@ const INTERVAL_OPTIONS = [
   { value: '1d', label: '하루' },
 ]
 
-// 조회 범위(어디서부터 어디까지 볼지). d-solo 임베드는 대시보드 자체의 Time range picker가
-// 보이지 않으므로, 이 값을 URL의 from/to 파라미터로 직접 넘겨줘야 그래프가 실제 데이터 구간을 그린다.
 const RANGE_OPTIONS = [
   { value: '5m', label: '최근 5분' },
   { value: '15m', label: '최근 15분' },
@@ -34,34 +31,11 @@ const RANGE_OPTIONS = [
   { value: '7d', label: '최근 7일' },
 ]
 
-// Grafana 패널을 d-solo(단일 패널, 대시보드 UI 없음)로 임베드하고, 필터/집계 단위는
-// 전부 프론트에서 만든 컨트롤로만 조작한다. Grafana의 Add/Remove 패널, Time range picker 등
-// 대시보드 자체 UI는 노출하지 않는다.
-function GrafanaMetricCard({ title, description, panelId, height = 260, filterGroups = [], variables = {} }) {
+// 조회 범위와 집계 단위는 임베드 패널에 필요한 기본 조작으로 유지한다.
+// 검사 항목·상태·실패 사유 같은 데이터 필터 칩은 Grafana 자체 기능에 맡긴다.
+function GrafanaMetricCard({ title, description, panelId, height = 260, variables = {} }) {
   const [intervalValue, setIntervalValue] = useState('10s')
   const [rangeValue, setRangeValue] = useState('15m')
-  const [selections, setSelections] = useState(() =>
-    Object.fromEntries(
-      filterGroups.map((group) => [group.name, new Set(group.options.map((option) => option.value))])
-    )
-  )
-
-  function toggleOption(groupName, value) {
-    setSelections((prev) => {
-      const next = new Set(prev[groupName])
-      if (next.has(value)) next.delete(value)
-      else next.add(value)
-      return { ...prev, [groupName]: next }
-    })
-  }
-
-  function toggleAllOptions(group) {
-    setSelections((prev) => {
-      const allSelected = group.options.every((option) => prev[group.name]?.has(option.value))
-      const next = allSelected ? new Set() : new Set(group.options.map((option) => option.value))
-      return { ...prev, [group.name]: next }
-    })
-  }
 
   const src = useMemo(() => {
     const params = new URLSearchParams({
@@ -78,13 +52,8 @@ function GrafanaMetricCard({ title, description, panelId, height = 260, filterGr
         params.append(`var-${name}`, String(value))
       }
     })
-    filterGroups.forEach((group) => {
-      const values = selections[group.name]
-      if (!values) return
-      values.forEach((value) => params.append(`var-${group.name}`, value))
-    })
     return `${GRAFANA_URL}${DASHBOARD_PATH}?${params.toString()}`
-  }, [intervalValue, rangeValue, selections, filterGroups, panelId, variables])
+  }, [intervalValue, rangeValue, panelId, variables])
 
   return (
     <section className="grafana-metric-card">
@@ -112,43 +81,6 @@ function GrafanaMetricCard({ title, description, panelId, height = 260, filterGr
           </label>
         </div>
       </div>
-
-      {filterGroups.length > 0 && (
-        <div className="grafana-metric-filters">
-          {filterGroups.map((group) => {
-            const allSelected = group.options.every((option) => selections[group.name]?.has(option.value))
-            return (
-            <div key={group.name} className="grafana-filter-group">
-              <span className="grafana-filter-label">{group.label}</span>
-              <div className="grafana-filter-chips">
-                <button
-                  type="button"
-                  className={`grafana-filter-chip grafana-filter-chip-all ${allSelected ? 'active' : ''}`}
-                  aria-pressed={allSelected}
-                  onClick={() => toggleAllOptions(group)}
-                >
-                  {allSelected ? '전체 해제' : '전체 선택'}
-                </button>
-                {group.options.map((option) => {
-                  const active = selections[group.name]?.has(option.value)
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`grafana-filter-chip ${active ? 'active' : ''}`}
-                      aria-pressed={active}
-                      onClick={() => toggleOption(group.name, option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            )
-          })}
-        </div>
-      )}
 
       <iframe
         className="grafana-metric-frame"
