@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ApiError,
   getConsistencyChecks,
@@ -84,29 +84,29 @@ function recentStatusMeta(result) {
   return RESULT_STATUS_META[result.status]
 }
 
-function matchesResultField(result, field, needle) {
-  if (field === 'checkName') return (CHECK_LABELS[result.checkName] ?? result.checkName).toLowerCase().includes(needle)
+function matchesResultField(result, field, needle, checkLabels) {
+  if (field === 'checkName') return (checkLabels[result.checkName] ?? result.checkName).toLowerCase().includes(needle)
   if (field === 'status') return recentStatusMeta(result).label.toLowerCase().includes(needle)
   if (field === 'scope') return scopeLabel(result).toLowerCase().includes(needle)
   return true
 }
 
-function filterResults(list, field, text) {
+function filterResults(list, field, text, checkLabels) {
   const needle = text.trim().toLowerCase()
   if (!needle) return list
-  return list.filter((result) => matchesResultField(result, field, needle))
+  return list.filter((result) => matchesResultField(result, field, needle, checkLabels))
 }
 
-function matchesRecoveryField(entry, field, needle) {
-  if (field === 'checkName') return (CHECK_LABELS[entry.checkName] ?? entry.checkName).toLowerCase().includes(needle)
+function matchesRecoveryField(entry, field, needle, checkLabels) {
+  if (field === 'checkName') return (checkLabels[entry.checkName] ?? entry.checkName).toLowerCase().includes(needle)
   if (field === 'status') return (RECOVERY_STATUS_META[entry.status]?.label ?? '').toLowerCase().includes(needle)
   return true
 }
 
-function filterRecoveryHistory(list, field, text) {
+function filterRecoveryHistory(list, field, text, checkLabels) {
   const needle = text.trim().toLowerCase()
   if (!needle) return list
-  return list.filter((entry) => matchesRecoveryField(entry, field, needle))
+  return list.filter((entry) => matchesRecoveryField(entry, field, needle, checkLabels))
 }
 
 // 패널 우측 상단의 검색 항목 탭 + 텍스트 검색 UI. 항목별로 검색 대상 필드가 다르다.
@@ -423,18 +423,33 @@ function IntegrityReportTab({ allBatchRunning }) {
     }
   }
 
-  const recentResults = filterResults(recentPageData.content, recentSearchField, recentSearchText)
+  const checkLabels = useMemo(() => ({
+    ...CHECK_LABELS,
+    ...Object.fromEntries(
+      Object.values(scopeCatalogs)
+        .flatMap((catalog) => catalog.checks ?? [])
+        .map((check) => [check.name, check.label]),
+    ),
+  }), [scopeCatalogs])
+  const recentResults = filterResults(recentPageData.content, recentSearchField, recentSearchText, checkLabels)
   const errorResults = filterResults(
     results.filter((item) => item.status === 'ERROR'),
     errorSearchField,
     errorSearchText,
+    checkLabels,
   ).slice(0, RECENT_RESULT_PAGE_SIZE)
   const failResults = filterResults(
     results.filter((item) => item.status === 'FAIL'),
     failSearchField,
     failSearchText,
+    checkLabels,
   ).slice(0, RECENT_RESULT_PAGE_SIZE)
-  const filteredRecoveryHistory = filterRecoveryHistory(recoveryHistory, recoverySearchField, recoverySearchText)
+  const filteredRecoveryHistory = filterRecoveryHistory(
+    recoveryHistory,
+    recoverySearchField,
+    recoverySearchText,
+    checkLabels,
+  )
   const selectedCatalog = scopeCatalogs[selectedScope]
   const recentPageGroupStart = Math.floor(recentPageData.page / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE
   const recentPageGroupEnd = Math.min(
@@ -639,7 +654,7 @@ function IntegrityReportTab({ allBatchRunning }) {
                 const meta = recentStatusMeta(result)
                 return (
                   <tr key={result.id}>
-                    <td><strong>{CHECK_LABELS[result.checkName] ?? result.checkName}</strong></td>
+                    <td><strong>{checkLabels[result.checkName] ?? result.checkName}</strong></td>
                     <td>{TRIGGER_LABELS[result.triggerType] ?? result.triggerType}</td>
                     <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
                     <td>{result.violationCount > 0 ? `${result.violationCount}건` : '-'}</td>
@@ -722,7 +737,7 @@ function IntegrityReportTab({ allBatchRunning }) {
             <ul className="verification-error-list">
               {errorResults.map((result) => (
                 <li key={result.id} className="error-box">
-                  <strong>{CHECK_LABELS[result.checkName] ?? result.checkName}</strong>
+                  <strong>{checkLabels[result.checkName] ?? result.checkName}</strong>
                   <span>{result.errorMessage}</span>
                   <small>{formatDate(result.executedAt)} · {scopeLabel(result)}</small>
                 </li>
@@ -766,7 +781,7 @@ function IntegrityReportTab({ allBatchRunning }) {
                 <li key={result.id} className="fail-item">
                   <div className="fail-item-heading">
                     <div>
-                      <strong>{CHECK_LABELS[result.checkName] ?? result.checkName}</strong>
+                      <strong>{checkLabels[result.checkName] ?? result.checkName}</strong>
                       <small>{scopeLabel(result)} · {formatDate(result.executedAt)}</small>
                     </div>
                     <span className={`status-badge ${recoveryMeta.tone}`}>{recoveryMeta.label}</span>
@@ -855,7 +870,7 @@ function IntegrityReportTab({ allBatchRunning }) {
                 const meta = RECOVERY_STATUS_META[entry.status] ?? RECOVERY_STATUS_META.NONE
                 return (
                   <tr key={entry.id}>
-                    <td><strong>{CHECK_LABELS[entry.checkName] ?? entry.checkName}</strong></td>
+                    <td><strong>{checkLabels[entry.checkName] ?? entry.checkName}</strong></td>
                     <td>{entry.methodLabel}</td>
                     <td><span className={`status-badge compact ${meta.tone}`}>{meta.label}</span></td>
                     <td>{formatDate(entry.requestedAt)}</td>
@@ -902,7 +917,7 @@ function IntegrityReportTab({ allBatchRunning }) {
             <div className="coupon-picker-header">
               <div>
                 <span className="eyebrow">DIFF DETAIL</span>
-                <h2 id="diff-detail-title">{CHECK_LABELS[detailResult.checkName] ?? detailResult.checkName}</h2>
+                <h2 id="diff-detail-title">{checkLabels[detailResult.checkName] ?? detailResult.checkName}</h2>
                 <p>{scopeLabel(detailResult)} · {formatDate(detailResult.executedAt)} · 위반 {detailResult.violationCount}건</p>
               </div>
               <button type="button" className="coupon-picker-close" onClick={closeViolationDetail} aria-label="상세 정보 닫기">×</button>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ApiError,
   getCoupons,
+  getConsistencyVerificationExecution,
   getIssuanceStats,
   getRecentCouponEvents,
   issueCoupon,
@@ -20,7 +21,19 @@ import { subscribeNotifications } from './utils/notificationStream'
 import './App.css'
 
 const WORKSPACE_STORAGE_KEY = 'ace-manager-coupon-workspace'
+const CONSISTENCY_BATCH_STORAGE_KEY = 'ace-manager-consistency-batch'
 const CONSISTENCY_BATCH_HIDE_AFTER_COMPLETED_MS = 5000
+
+function loadConsistencyBatch() {
+  try {
+    const stored = localStorage.getItem(CONSISTENCY_BATCH_STORAGE_KEY)
+    if (!stored) return null
+    const parsed = JSON.parse(stored)
+    return parsed?.jobExecutionId ? parsed : null
+  } catch {
+    return null
+  }
+}
 
 function millisecondsUntilNextCampaignRefresh(now = new Date()) {
   const next = new Date(now)
@@ -143,7 +156,7 @@ function App() {
   const [initialWorkspace] = useState(loadWorkspace)
   const [hasSavedCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons).length > 0)
   const [notice, setNotice] = useState(null)
-  const [consistencyBatch, setConsistencyBatch] = useState(null)
+  const [consistencyBatch, setConsistencyBatch] = useState(loadConsistencyBatch)
   const [stoppingConsistencyBatch, setStoppingConsistencyBatch] = useState(false)
   const [issueRecords, setIssueRecords] = useState(loadRecords)
   const [coupons, setCoupons] = useState(() => normalizeCoupons(initialWorkspace.coupons))
@@ -351,23 +364,45 @@ function App() {
             jobExecutionId: payload.jobExecutionId,
             totalSteps: payload.totalSteps,
             currentCheck: null,
+            currentCheckLabel: null,
+            progress: null,
             completedSteps: [],
             finished: false,
           })
           break
         case 'CONSISTENCY_STEP_STARTED':
-          setConsistencyBatch((current) => current && { ...current, currentCheck: payload.checkName })
+          setConsistencyBatch((current) => current && {
+            ...current,
+            currentCheck: payload.checkName,
+            currentCheckLabel: payload.checkLabel,
+            progress: null,
+          })
+          break
+        case 'CONSISTENCY_STEP_PROGRESS':
+          setConsistencyBatch((current) => (
+            current && current.jobExecutionId === payload.jobExecutionId
+              ? {
+                  ...current,
+                  currentCheck: payload.checkName,
+                  currentCheckLabel: payload.checkLabel,
+                  progress: payload,
+                }
+              : current
+          ))
           break
         case 'CONSISTENCY_STEP_COMPLETED':
           setConsistencyBatch((current) => current && {
             ...current,
             completedSteps: [...current.completedSteps, payload.checkName],
+            progress: null,
           })
           break
         case 'CONSISTENCY_BATCH_COMPLETED':
           setConsistencyBatch((current) => current && {
             ...current,
             currentCheck: null,
+            currentCheckLabel: null,
+            progress: null,
             finished: true,
             finalStatus: payload.status,
           })
@@ -377,6 +412,52 @@ function App() {
       }
     })
     return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (consistencyBatch) {
+        localStorage.setItem(CONSISTENCY_BATCH_STORAGE_KEY, JSON.stringify(consistencyBatch))
+      } else {
+        localStorage.removeItem(CONSISTENCY_BATCH_STORAGE_KEY)
+      }
+    } catch {
+      // 저장소를 사용할 수 없어도 현재 세션의 배치 관제는 계속 유지한다.
+    }
+  }, [consistencyBatch])
+
+  useEffect(() => {
+    const restored = consistencyBatch
+    if (!restored?.jobExecutionId || restored.finished) return undefined
+
+    const controller = new AbortController()
+    getConsistencyVerificationExecution(restored.jobExecutionId, controller.signal)
+      .then((execution) => {
+        const terminal = ['COMPLETED', 'FAILED', 'STOPPED', 'ABANDONED'].includes(execution.status)
+        if (!terminal) return
+        setConsistencyBatch((current) => (
+          current?.jobExecutionId === restored.jobExecutionId
+            ? {
+                ...current,
+                currentCheck: null,
+                currentCheckLabel: null,
+                progress: null,
+                finished: true,
+                finalStatus: execution.status,
+              }
+            : current
+        ))
+      })
+      .catch((error) => {
+        if (error.name === 'AbortError') return
+        setConsistencyBatch((current) => (
+          current?.jobExecutionId === restored.jobExecutionId ? null : current
+        ))
+      })
+
+    return () => controller.abort()
+    // 새로고침 시 복원된 작업을 최초 한 번만 서버 상태와 대조한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

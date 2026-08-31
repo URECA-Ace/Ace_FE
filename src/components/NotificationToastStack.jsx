@@ -7,7 +7,11 @@ const MAX_VISIBLE_TOASTS = 20
 
 // 이 알림들은 ConsistencyBatchStatusBanner가 상시 표시로 이미 보여주므로, 여기서
 // 토스트로 중복 노출하지 않는다.
-const SKIPPED_TOAST_TYPES = new Set(['CONSISTENCY_BATCH_STARTED', 'CONSISTENCY_STEP_STARTED'])
+const SKIPPED_TOAST_TYPES = new Set([
+  'CONSISTENCY_BATCH_STARTED',
+  'CONSISTENCY_STEP_STARTED',
+  'CONSISTENCY_STEP_PROGRESS',
+])
 
 const TONE_ICON = { success: '✓', danger: '!', info: 'i' }
 
@@ -54,8 +58,8 @@ const NOTIFICATION_TONES = {
 
 function describeNotification({ type, payload }) {
   const describe = NOTIFICATION_LABELS[type]
-  const message = describe ? describe(payload ?? {}) : `${type} 알림이 도착했습니다.`
-  return { tone: NOTIFICATION_TONES[type] ?? 'info', message }
+  if (!describe) return null
+  return { tone: NOTIFICATION_TONES[type] ?? 'info', message: describe(payload ?? {}) }
 }
 
 function NotificationToastStack() {
@@ -64,7 +68,9 @@ function NotificationToastStack() {
   useEffect(() => {
     const unsubscribe = subscribeNotifications((notification) => {
       if (SKIPPED_TOAST_TYPES.has(notification.type)) return
-      const { tone, message } = describeNotification(notification)
+      const description = describeNotification(notification)
+      if (!description) return
+      const { tone, message } = description
       // 개발 중 Vite HMR로 이 모듈이 다시 로드되면 모듈 스코프 변수는 초기화되지만
       // 컴포넌트 state(toasts)는 유지되므로, 카운터 대신 충돌 없는 id를 사용해야 한다.
       const id = crypto.randomUUID()

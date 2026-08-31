@@ -13,6 +13,15 @@ function ConsistencyBatchStatusBanner({ batch, onStop, stopping }) {
   if (!batch) return null
 
   const doneCount = batch.completedSteps.length
+  const progress = batch.progress
+  const eventProgressRate = progress?.totalEventCount > 0
+    ? Math.min((progress.processedEventCount / progress.totalEventCount) * 100, 100)
+    : 0
+  const firstEventId = progress?.eventIds?.[0]
+  const lastEventId = progress?.eventIds?.[progress.eventIds.length - 1]
+  const eventRange = firstEventId == null
+    ? null
+    : firstEventId === lastEventId ? `#${firstEventId}` : `#${firstEventId} ~ #${lastEventId}`
 
   return (
     <div className={`consistency-batch-banner ${batch.finished ? 'finished' : ''}`} role="status" aria-live="polite">
@@ -22,10 +31,27 @@ function ConsistencyBatchStatusBanner({ batch, onStop, stopping }) {
         </span>
       ) : (
         <>
-          <span>
-            정합성 배치 실행 중 ({doneCount}/{batch.totalSteps})
-            {batch.currentCheck && ` — 현재: ${CHECK_LABELS[batch.currentCheck] ?? batch.currentCheck}`}
-          </span>
+          <div className="consistency-batch-progress-content">
+            <strong>ALL 정합성 검증 실행 중 ({doneCount}/{batch.totalSteps})</strong>
+            {batch.currentCheck && (
+              <span>
+                현재 검사: {batch.currentCheckLabel ?? CHECK_LABELS[batch.currentCheck] ?? batch.currentCheck}
+              </span>
+            )}
+            {progress && (
+              <>
+                <span>
+                  Step {progress.stepIndex}/{progress.totalSteps}
+                  {eventRange && ` · 이벤트 ${eventRange}`}
+                  {` · ${progress.processedEventCount.toLocaleString()}/${progress.totalEventCount.toLocaleString()}개`}
+                  {` · 위반 ${progress.violationCount.toLocaleString()}건`}
+                </span>
+                <div className="consistency-batch-progress-track" aria-label="현재 검사 이벤트 진행률">
+                  <span style={{ width: `${eventProgressRate}%` }} />
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             className="consistency-batch-stop-button"

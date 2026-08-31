@@ -86,10 +86,6 @@ function ConsistencySchedulePanel() {
         delete next[schedulerName]
         return next
       })
-      setNotice({
-        tone: 'success',
-        message: `${SCHEDULER_LABELS[schedulerName] ?? schedulerName} 주기를 ${draftSeconds}초로 변경했습니다.`,
-      })
     } catch (error) {
       const message = error instanceof ApiError ? error.message : '주기 변경에 실패했습니다.'
       setNotice({ tone: 'danger', message })

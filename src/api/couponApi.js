@@ -199,6 +199,15 @@ export function stopConsistencyVerification(jobExecutionId, signal) {
   })
 }
 
+export function getConsistencyVerificationExecution(jobExecutionId, signal) {
+  return request(`/api/v1/consistency/verifications/${jobExecutionId}`, {
+    method: 'GET',
+    signal,
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+}
+
 export function getConsistencyResults({ status, page = 0, size = 100 } = {}, signal) {
   const query = new URLSearchParams({ page: String(page), size: String(size) })
   if (status) query.set('status', status)
