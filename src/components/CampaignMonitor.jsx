@@ -58,7 +58,7 @@ function formatObservedAt(value) {
   const min = String(date.getMinutes()).padStart(2, '0')
   const ss = String(date.getSeconds()).padStart(2, '0')
 
-  return `${mm}/${dd} ${hh}:${min}:${ss}`
+  return `${mm}. ${dd}. ${hh}:${min}:${ss}`
 }
 
 function campaignLabel(campaign) {
