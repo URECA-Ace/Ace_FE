@@ -249,6 +249,7 @@ function App() {
     }
 
     const controller = new AbortController()
+    const runId = crypto.randomUUID()
     loadAbortRef.current = controller
     const startedAt = currentTimestamp()
     let nextIndex = 0
@@ -294,6 +295,7 @@ function App() {
             batchUserId,
             crypto.randomUUID(),
             controller.signal,
+            runId,
           )
           counters.accepted += 1
           if (Number.isFinite(data.remainingStock)) {

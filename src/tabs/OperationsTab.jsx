@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ApiError, getIssueStatus, getIssuanceStats, issueCoupon, useCoupon as requestCouponUse, cancelCoupon, getCouponIssueId, expireCoupon as requestCouponExpire } from '../api/couponApi'
 import CampaignMonitor from '../components/CampaignMonitor'
 import GrafanaMetricCard from '../components/GrafanaMetricCard'
-import IdempotencyConcurrencyTest from '../components/IdempotencyConcurrencyTest'
 import { loadRecords, saveRecords } from '../utils/issueRecords'
 
 const PENDING_STATUSES = new Set(['ACCEPTED', 'PROCESSING'])
@@ -908,11 +907,6 @@ function OperationsTab({
         </article>
 
       </section>
-
-      <IdempotencyConcurrencyTest
-        campaign={selectedIssueCampaign}
-        campaignLabel={campaignLabel}
-      />
 
       <section className="history-grid">
         <article className="panel history-panel">

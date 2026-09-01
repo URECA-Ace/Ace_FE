@@ -770,8 +770,11 @@ function IntegrityReportTab({ allBatchRunning }) {
           {errorResults.length > 0 ? (
             <ul className="verification-error-list">
               {errorResults.map((result) => {
+                const resultError = result.errorMessage?.toLowerCase() ?? ''
                 const restartable = result.scopeType === 'ALL'
-                  && result.errorMessage?.toLowerCase().includes('interrupted')
+                  && (resultError.includes('interrupted')
+                    || resultError.includes('optimisticlockingfailureexception')
+                    || resultError.includes('wrong version'))
                 const restarting = restartingResultId === result.id
                 const restarted = restartedResults[result.id]
                 return (

@@ -50,13 +50,14 @@ async function request(path, options) {
   return body.data
 }
 
-export function issueCoupon(eventId, userId, idempotencyKey, signal) {
+export function issueCoupon(eventId, userId, idempotencyKey, signal, runId) {
   return request(`/api/v1/events/${eventId}/issues`, {
     method: 'POST',
     signal,
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey,
+      ...(runId ? { 'X-Test-Run-Id': runId } : {}),
     },
     body: JSON.stringify({ userId }),
   })
